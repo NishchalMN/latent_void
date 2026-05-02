@@ -60,7 +60,7 @@ if [[ "${INSTALL_GPU_DEPS:-0}" == "1" ]]; then
   clone_or_update_recursive https://github.com/BaowenZ/RaDe-GS.git external/DiffSplat/extensions/RaDe-GS
   export MAX_JOBS="${MAX_JOBS:-4}"
   if command -v nvcc >/dev/null 2>&1; then
-    export CUDA_HOME="${CUDA_HOME:-$(cd "$(dirname "$(command -v nvcc)")/.." && pwd)}"
+    export CUDA_HOME="$(cd "$(dirname "$(command -v nvcc)")/.." && pwd)"
   fi
   export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-9.0}"
   python -m pip install --no-build-isolation external/DiffSplat/extensions/RaDe-GS/submodules/diff-gaussian-rasterization
