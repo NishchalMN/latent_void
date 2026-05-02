@@ -150,11 +150,14 @@ def main():
         print(json.dumps(result, indent=2))
         return 0
 
+    print("[latent_void] loading Marigold depth=%s normal=%s device=%s" % (depth_model, normal_model, device), flush=True)
     torch, depth_pipe, normal_pipe = _load_marigold(depth_model, normal_model, device)
+    print("[latent_void] Marigold pipelines ready; processing %d views" % len(views), flush=True)
     raw_coords = []
     entries = []
     with torch.inference_mode():
         for idx, (view, camera) in enumerate(zip(views, normalized_cameras)):
+            print("[latent_void] geometry view %d/%d %s" % (idx + 1, len(views), view.view_id), flush=True)
             image = Image.open(view.image_path).convert("RGB").resize((input_res, input_res), Image.BICUBIC)
             depth_output = depth_pipe(image, num_inference_steps=num_inference_steps, ensemble_size=ensemble_size)
             normal_output = normal_pipe(image, num_inference_steps=num_inference_steps, ensemble_size=ensemble_size)
@@ -202,6 +205,7 @@ def main():
         "views": entries,
     }
     write_json(os.path.join(args.output_dir, "geometry_manifest.json"), manifest)
+    print("[latent_void] wrote geometry manifest %s" % os.path.join(args.output_dir, "geometry_manifest.json"), flush=True)
     print(json.dumps({"ok": True, "manifest": os.path.join(args.output_dir, "geometry_manifest.json"), "num_views": len(entries)}, indent=2))
     return 0
 

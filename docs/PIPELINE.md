@@ -44,6 +44,12 @@ coordinate maps as model inputs; Marigold depth is saved and used to compute the
 coordinate maps. The exported 12-channel GSVAE grid follows DiffSplat's actual
 order: RGB, scale, rotation quaternion, opacity, depth.
 
+On Zaratan, Marigold should be pre-downloaded with
+`scripts/download_marigold.py` and referenced by local checkpoint paths in the
+config. The first H100 geometry attempt stalled before GPU use while resolving
+Marigold from Hugging Face inside the Slurm allocation, so compute jobs should
+not depend on outbound model downloads.
+
 ### GSRecon
 
 Configured by `external.gsrecon_command`. It receives formatted values such as

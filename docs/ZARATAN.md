@@ -29,6 +29,7 @@ git pull --ff-only
 cd /home/gnanesh/scratch.msml612pcs3/latent_void
 scripts/setup_zaratan_deps.sh
 scripts/download_inpaint360gs.sh
+python scripts/download_marigold.py --output-dir checkpoints/marigold
 python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml
 python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
 python -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --dry-run
@@ -137,5 +138,10 @@ ls -ld . .git runs logs .venvs data checkpoints
   DiffSplat GSRecon. Install heavy dependencies with:
 
   ```bash
-  INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
-  ```
+INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
+```
+
+`scripts/setup_zaratan_deps.sh` downloads Marigold snapshots by default. The
+Zaratan config points at `checkpoints/marigold/depth-v1-1` and
+`checkpoints/marigold/normals-v1-1` so H100 jobs load local files instead of
+trying to reach Hugging Face from a compute node.

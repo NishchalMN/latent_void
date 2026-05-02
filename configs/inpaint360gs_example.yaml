@@ -28,8 +28,8 @@ checkpoints:
 geometry:
   input_res: 256
   device: cuda
-  depth_model: prs-eth/marigold-depth-v1-1
-  normal_model: prs-eth/marigold-normals-v1-1
+  depth_model: ${MARIGOLD_DEPTH_MODEL:-prs-eth/marigold-depth-v1-1}
+  normal_model: ${MARIGOLD_NORMAL_MODEL:-prs-eth/marigold-normals-v1-1}
   num_inference_steps: 4
   ensemble_size: 1
   depth_scale: 5.0

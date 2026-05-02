@@ -49,6 +49,10 @@ Implemented and verified locally:
 - Render diagnostics are now wired through `tools/render_latent_scene.py`,
   which decodes scaled GSVAE latents and renders before/after RGB, alpha, and
   depth outputs with DiffSplat's renderer.
+- Marigold snapshots are downloaded with `scripts/download_marigold.py`; the
+  Zaratan config points at local `checkpoints/marigold/depth-v1-1` and
+  `checkpoints/marigold/normals-v1-1` paths so Slurm jobs do not rely on
+  compute-node network access to Hugging Face.
 - Staged H100 Slurm scripts exist for geometry, GSRecon/GSVAE reconstruction,
   SAM 3 segmentation, and latent render diagnostics.
 - Multi-view mask fusion with synthetic projected Gaussian data.
@@ -163,14 +167,13 @@ also produced the expected `tools/render_latent_scene.py` command.
   - result: failed quickly because `tools/preprocess_geometry.py` could not
     import `latent_void` when run as a script on the Slurm worker.
   - fix: `7cea7f7 Allow geometry tool imports under Slurm`
-- Replacement H100 geometry job is queued:
+- Replacement H100 geometry job ran and was canceled:
   - job id: `19185139`
   - partition: `gpu-h100`
-  - state at latest check: `PENDING`
-  - reason: `Priority`
-  - `squeue --start` estimate at the latest check:
-    `2026-05-03T04:03:32` on `gpu-a6-9`
-- Dependent continuation chain is queued against `19185139`:
+  - node: `gpu-a6-9`
+  - started: `2026-05-02T19:29:24`
+  - canceled after diagnostics showed no progress before Marigold inference
+- Dependent continuation chain was queued against `19185139` and then canceled:
   - `19186465`: `latent-void-gsrecon`, dependency `afterok:19185139`
   - `19186466`: `latent-void-sam3`, dependency `afterok:19186465`
   - `19186467`: `latent-void-inpaint`, dependency `afterok:19186466`
@@ -178,6 +181,12 @@ also produced the expected `tools/render_latent_scene.py` command.
     `--skip-geometry --skip-reconstruct --skip-segment`, so it performs fusion,
     fallback latent inpaint plumbing, and render diagnostics from the staged
     outputs.
+- The first replacement geometry run `19185139` was canceled after diagnostics
+  showed the process sleeping for 11+ minutes with 0 MiB GPU usage and no
+  geometry files. It was stuck before Marigold inference, likely while resolving
+  Hugging Face model files from the compute node. The chain jobs
+  `19186465`, `19186466`, and `19186467` were canceled with it and must be
+  resubmitted after local Marigold snapshots are downloaded.
 - Backup A100 geometry job was briefly submitted with a separate output directory
   and then canceled so the bring-up stays focused on H100:
   - job id: `19185424`
@@ -272,19 +281,15 @@ Generated local dry-run artifacts are ignored by Git under `runs/`.
 
 ## Next Best Step
 
-Wait for the queued H100 geometry job:
+Download local Marigold snapshots on Zaratan, then resubmit the staged H100
+chain:
 
 ```bash
-squeue -j 19185139 -o '%.18i %.9P %.30j %.8T %.10M %.10l %.30R'
-tail -120 logs/latent-void-geom-19185139.out
-tail -120 logs/latent-void-geom-19185139.err
+python scripts/download_marigold.py --output-dir checkpoints/marigold
 ```
 
-Zaratan has already pulled the latest GitHub commit and passed post-pull tests,
-so the queued Slurm job should use the mask/grid-alignment and render fixes.
-The dependent continuation chain is already submitted; after geometry starts,
-watch the four queued job IDs above rather than manually resubmitting duplicate
-jobs.
+Then submit geometry, reconstruct, SAM 3, and final fuse/inpaint/render with
+`afterok` dependencies again.
 
 Remaining model-adapter blocker:
 

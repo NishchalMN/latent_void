@@ -129,6 +129,12 @@ Install model dependencies before running Marigold or GSRecon on H100:
 INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
 ```
 
+Download Marigold snapshots for offline compute-node use:
+
+```bash
+python scripts/download_marigold.py --output-dir checkpoints/marigold
+```
+
 That heavy setup installs PyTorch, SAM 3, DiffSplat requirements,
 Marigold-compatible Diffusers, Transformers, and the RaDe-GS
 `diff-gaussian-rasterization` extension required by DiffSplat imports.
@@ -158,17 +164,20 @@ Current geometry bring-up:
   `tools/preprocess_geometry.py` could not import the local `latent_void`
   package when invoked as a script.
 - `7cea7f7` fixes that script import path.
-- `19185139` is the replacement mini geometry job and was pending for `Priority`
-  at the latest check.
-- `squeue --start -j 19185139` estimated start time:
-  `2026-05-03T04:03:32` on `gpu-a6-9`.
-- Dependent continuation chain:
+- `19185139` was the replacement mini geometry job. It started on
+  `gpu-a6-9` at `2026-05-02T19:29:24` and was later canceled for the Marigold
+  model-resolution stall noted below.
+- Dependent continuation chain was also canceled:
   - `19186465`: reconstruct after `19185139`
   - `19186466`: SAM 3 segmentation after `19186465`
   - `19186467`: skip-heavy final run after `19186466`; does fuse, fallback
     inpaint, and render diagnostics.
-- `19185424` was a backup `gpu-a100` geometry job and was canceled; the active
-  bring-up target is `19185139` on `gpu-h100`.
+- `19185139` and its dependent chain were canceled after an overlapping process
+  diagnostic showed `tools/preprocess_geometry.py` sleeping for 11+ minutes,
+  0 MiB GPU usage, and no geometry files. Treat that as a Marigold model
+  resolution/download stall on the compute node. Use local
+  `checkpoints/marigold/*` snapshots before resubmitting.
+- `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.
 - A non-submitting `sbatch --test-only --partition=gpu --gres=gpu:h100:1`
