@@ -124,6 +124,12 @@ INSTALL_GPU_DEPS=1 DOWNLOAD_DIFFSPLAT_CKPTS=0 MAX_JOBS=4 scripts/setup_zaratan_d
   - partition: `gpu-h100`
   - state at latest check: `PENDING`
   - reason: `Priority`
+- Backup A100 geometry job is also queued with a separate output directory:
+  - job id: `19185424`
+  - partition: `gpu-a100`
+  - output: `runs/inpaint360gs_bag_mini_a100`
+  - state at latest check: `PENDING`
+  - reason: `Priority`
 - Slurm smoke job was submitted twice and canceled while pending:
   - first used the old `gpu-h100` smoke template and was pending for priority.
   - second used the new `debug` CPU template and was pending for resources.
@@ -187,12 +193,14 @@ Generated local dry-run artifacts are ignored by Git under `runs/`.
 
 ## Next Best Step
 
-Wait for the replacement H100 geometry job:
+Wait for either queued geometry job:
 
 ```bash
-squeue -j 19185139 -o '%.18i %.9P %.30j %.8T %.10M %.10l %.30R'
+squeue -j 19185139,19185424 -o '%.18i %.9P %.30j %.8T %.10M %.10l %.30R'
 tail -120 logs/latent-void-geom-19185139.out
 tail -120 logs/latent-void-geom-19185139.err
+tail -120 logs/latent-void-geom-19185424.out
+tail -120 logs/latent-void-geom-19185424.err
 ```
 
 After geometry succeeds, continue with:
