@@ -1,5 +1,6 @@
 import os
 
+from latent_void.colmap import load_colmap_scene
 from latent_void.config import get_nested
 from latent_void.io import expand_brace_glob, read_json
 
@@ -28,7 +29,7 @@ class Inpaint360GSDataset(object):
         self.scene_dir = os.path.join(self.root, self.scene)
         self.images_glob = get_nested(config, "dataset.images_glob", "images/*.{png,jpg,jpeg}")
         self.masks_glob = get_nested(config, "dataset.masks_glob", "masks/*.{npy,png,jpg,jpeg}")
-        self.cameras_path = get_nested(config, "dataset.cameras_path", "cameras.json")
+        self.cameras_path = get_nested(config, "dataset.cameras_path", "sparse/0")
 
     def _scene_glob(self, pattern):
         return os.path.join(self.scene_dir, pattern)
@@ -41,6 +42,11 @@ class Inpaint360GSDataset(object):
 
     def camera_map(self):
         path = os.path.join(self.scene_dir, self.cameras_path)
+        if os.path.isdir(path):
+            return load_colmap_scene(path)
+        fallback_colmap = os.path.join(self.scene_dir, "sparse", "0")
+        if not os.path.exists(path) and os.path.isdir(fallback_colmap):
+            return load_colmap_scene(fallback_colmap)
         if not os.path.exists(path):
             return {}
         data = read_json(path)

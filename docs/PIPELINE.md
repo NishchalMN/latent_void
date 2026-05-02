@@ -4,7 +4,7 @@
 
 The MVP is native 3D scene removal:
 
-1. Load a real multi-view Inpaint360GS scene.
+1. Load a real multi-view Inpaint360GS scene with COLMAP camera metadata.
 2. Run DiffSplat `GSRecon` to obtain structured Gaussian grids.
 3. Encode those grids into GSVAE splat latents.
 4. Render/load calibrated views.
@@ -30,6 +30,12 @@ Expected useful outputs:
   `positions` with camera metadata or precomputed `uvs` and `visibility`.
 - `latent.npy`: optional GSVAE latent tensor.
 - rendered RGB/depth/alpha views for SAM 3 and diagnostics.
+
+Current caveat: upstream DiffSplat documents GSRecon inference through issue
+discussion rather than a packaged CLI, and its public checkpoint is trained for
+GObjaverse-style four-view object inputs with RGB plus camera-derived geometry
+channels. Real Inpaint360GS RGB scenes therefore need an explicit adapter for
+normal/coordinate inputs or a retrained RGB-only scene encoder.
 
 ### SAM 3
 

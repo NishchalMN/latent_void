@@ -70,3 +70,25 @@ Slurm templates default to `msml612pcs3-class` and `gpu-h100`.
 Reason:
 The Zaratan balance showed substantially more unused allocation there than the
 other visible account.
+
+## D008: Parse Inpaint360GS COLMAP Metadata Locally
+
+Decision:
+The dataset loader reads COLMAP `sparse/0` text or binary cameras/images files
+and stores camera intrinsics plus camera-to-world poses in the view manifest.
+
+Reason:
+Inpaint360GS scenes are real multi-view sequences with COLMAP calibration, not
+prepacked DiffSplat manifests. Keeping this parser local makes dataset discovery
+and later GSRecon adapters reproducible.
+
+## D009: Treat GSRecon Scene Export As A Real Adapter Task
+
+Decision:
+`tools/run_gsrecon_export.py` stays a failing contract wrapper until we build a
+proper DiffSplat adapter for Inpaint360GS.
+
+Reason:
+The public DiffSplat repo does not ship a direct scene export CLI, and the
+pretrained GSRecon checkpoint expects GObjaverse-style RGB plus geometry
+channels. Returning fake Gaussian grids would hide the main research risk.

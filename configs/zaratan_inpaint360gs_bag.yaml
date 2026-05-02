@@ -1,0 +1,60 @@
+project:
+  name: latent_void_inpaint360gs_bag
+  output_dir: /home/gnanesh/scratch.msml612pcs3/latent_void/runs/inpaint360gs_bag
+  device: cuda
+  seed: 1234
+
+dataset:
+  type: inpaint360gs
+  root: /home/gnanesh/scratch.msml612pcs3/latent_void/data/inpaint360
+  scene: bag
+  images_glob: images/*.{JPG,jpg,jpeg,png}
+  masks_glob: masks/*.{npy,png,jpg,jpeg}
+  cameras_path: sparse/0
+
+prompts:
+  object: bag
+  shadow: ""
+  include_shadow: false
+
+checkpoints:
+  diffsplat_root: /home/gnanesh/scratch.msml612pcs3/latent_void/external/DiffSplat
+  gsrecon_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat/gsrecon_gobj265k_cnp_even4
+  gsvae_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat/gsvae_gobj265k_sdxl_fp16
+  sam3_root: /home/gnanesh/scratch.msml612pcs3/latent_void/external/sam3
+  sam3_weights: ""
+  latent_inpaint_weights: ""
+
+pipeline:
+  max_views: 16
+  mask_threshold: 0.55
+  latent_downsample: 8
+  gaussian_npz: ""
+  latent_npy: ""
+  mask_source: auto
+  allow_fallback_inpaint: true
+
+external:
+  gsrecon_command: >-
+    python tools/run_gsrecon_export.py
+    --diffsplat-root {diffsplat_root}
+    --weights {gsrecon_weights}
+    --dataset-root {dataset_root}
+    --scene {scene_id}
+    --output-dir {gsrecon_dir}
+  sam3_command: >-
+    python tools/run_sam3_multiview.py
+    --sam3-root {sam3_root}
+    --manifest {manifest_path}
+    --prompt "{prompt}"
+    --output-dir {mask_dir}
+  latent_inpaint_command: ""
+  render_command: ""
+
+hpc:
+  account: msml612pcs3-class
+  partition: gpu-h100
+  gres: gpu:h100:1
+  time: "02:00:00"
+  cpus_per_task: 8
+  mem: 64G
