@@ -110,7 +110,8 @@ python scripts/check_sam3_access.py --download
   SAM 3, DiffSplat requirements, Diffusers 0.35.2, and Transformers, then failed
   while building `diff-gaussian-rasterization` because pip build isolation could
   not import the installed `torch`. The setup script now uses
-  `--no-build-isolation` and sets `TORCH_CUDA_ARCH_LIST=9.0` for H100 builds.
+  `--no-build-isolation`, loads `cuda/12.3.0/gcc/11.3.0/zen2`, and sets
+  `TORCH_CUDA_ARCH_LIST=9.0` for H100 builds.
 - The SAM 3 Transformers/repo backend auto-selection is implemented but not yet
   H100-tested on a real image.
 - Research-quality latent inpainting logic is not complete yet.
