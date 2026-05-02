@@ -145,6 +145,15 @@ sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --
 sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
 ```
 
+Current geometry bring-up:
+
+- `19185136` ran on `gpu-a6-4.zaratan.umd.edu` and failed because
+  `tools/preprocess_geometry.py` could not import the local `latent_void`
+  package when invoked as a script.
+- `7cea7f7` fixes that script import path.
+- `19185139` is the replacement mini geometry job and was pending for `Priority`
+  at the latest check.
+
 ## Real Job Command
 
 After creating a real config:

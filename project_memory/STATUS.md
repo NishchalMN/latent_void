@@ -14,7 +14,7 @@ Last updated: 2026-05-02
 - Branch:
   `main`
 - Latest pushed commit before this memory update:
-  `9b7f146 Add Marigold geometry preprocessing path`
+  `7cea7f7 Allow geometry tool imports under Slurm`
 
 Implemented and verified locally:
 
@@ -58,6 +58,23 @@ Implemented and verified locally:
   - `gsdiff_gobj83k_pas_fp16__render`
 - SAM 3 checkpoint download now succeeds on Zaratan after HF auth:
   `checkpoints/sam3/sam3.pt`.
+- Zaratan heavy GPU dependency setup now completes with:
+  - `torch` / `torchvision`
+  - SAM 3 repo package
+  - DiffSplat requirements
+  - Diffusers 0.35.2 with Marigold pipelines
+  - Transformers SAM 3 classes
+  - RaDe-GS `diff_gaussian_rasterization`
+- Login-node import checks pass for:
+  - `torch`
+  - `diffusers`
+  - `transformers`
+  - `sam3`
+  - `diff_gaussian_rasterization`
+  - `MarigoldDepthPipeline`
+  - `MarigoldNormalsPipeline`
+  - `Sam3Model`
+  - `Sam3Processor`
 - Inpaint360GS `bag` scene discovery works on Zaratan:
   - `num_images`: 156
   - selected views with current config: 16
@@ -91,11 +108,22 @@ scripts/download_inpaint360gs.sh
 python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml --strict-paths
 python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
 python scripts/check_sam3_access.py --download
+INSTALL_GPU_DEPS=1 DOWNLOAD_DIFFSPLAT_CKPTS=0 MAX_JOBS=4 scripts/setup_zaratan_deps.sh
 ```
 
 ## What Fails Or Is Not Ready
 
-- No real H100 job has been submitted yet.
+- First real H100 geometry job was submitted and ran:
+  - job id: `19185136`
+  - node: `gpu-a6-4.zaratan.umd.edu`
+  - result: failed quickly because `tools/preprocess_geometry.py` could not
+    import `latent_void` when run as a script on the Slurm worker.
+  - fix: `7cea7f7 Allow geometry tool imports under Slurm`
+- Replacement H100 geometry job is queued:
+  - job id: `19185139`
+  - partition: `gpu-h100`
+  - state at latest check: `PENDING`
+  - reason: `Priority`
 - Slurm smoke job was submitted twice and canceled while pending:
   - first used the old `gpu-h100` smoke template and was pending for priority.
   - second used the new `debug` CPU template and was pending for resources.
@@ -159,12 +187,12 @@ Generated local dry-run artifacts are ignored by Git under `runs/`.
 
 ## Next Best Step
 
-Run the heavy dependency setup on Zaratan, then stage the first real H100
-bring-up:
+Wait for the replacement H100 geometry job:
 
 ```bash
-INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
-sbatch slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+squeue -j 19185139 -o '%.18i %.9P %.30j %.8T %.10M %.10l %.30R'
+tail -120 logs/latent-void-geom-19185139.out
+tail -120 logs/latent-void-geom-19185139.err
 ```
 
 After geometry succeeds, continue with:
