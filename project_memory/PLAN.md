@@ -10,19 +10,21 @@ through GSVAE/DiffSplat latent space, and rendered as before/after diagnostics.
 Implementation stages:
 
 1. Configure a real Inpaint360GS scene on Zaratan.
-2. Configure installed DiffSplat/GSRecon paths and pretrained weights.
-3. Configure installed SAM 3 paths and pretrained weights.
-4. Run GSRecon to create Gaussian grids, projected Gaussian metadata, and latent
+2. Generate zero-training geometry side channels with Marigold depth, Marigold
+   normals, and COLMAP coordinate reprojection.
+3. Configure installed DiffSplat/GSRecon paths and pretrained weights.
+4. Configure installed SAM 3 paths and pretrained weights.
+5. Run GSRecon to create Gaussian grids, projected Gaussian metadata, and latent
    tensors.
-5. Run SAM 3 over calibrated scene views with object prompt and optional shadow
+6. Run SAM 3 over calibrated scene views with object prompt and optional shadow
    prompt.
-6. Fuse SAM masks into a Gaussian deletion mask using projected `uvs` and
+7. Fuse SAM masks into a Gaussian deletion mask using projected `uvs` and
    `visibility`.
-7. Create a latent void mask using the configured downsample strategy.
-8. Run latent inpainting through a configured pretrained or optimization
+8. Create a latent void mask using the configured downsample strategy.
+9. Run latent inpainting through a configured pretrained or optimization
    backend.
-9. Decode or merge the result back into a renderable Gaussian scene.
-10. Render before/after views, masks, depth diagnostics, and a turntable video.
+10. Decode or merge the result back into a renderable Gaussian scene.
+11. Render before/after views, masks, depth diagnostics, and a turntable video.
 
 ## Milestone 2: Artifact Reduction
 

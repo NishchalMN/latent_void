@@ -14,7 +14,7 @@ Last updated: 2026-05-02
 - Branch:
   `main`
 - Latest pushed commit before this memory update:
-  `8c97d67 Ignore Zaratan venv directory`
+  `9b7f146 Add Marigold geometry preprocessing path`
 
 Implemented and verified locally:
 
@@ -27,6 +27,12 @@ Implemented and verified locally:
 - GSRecon export adapter now accepts `geometry_manifest.json` and is able to
   export `gaussians.npz`, `gs_grid.npy`, and `latent.npy` once DiffSplat GPU
   dependencies are available.
+- Zaratan setup now has a heavy dependency path that installs Marigold-capable
+  Diffusers plus DiffSplat's RaDe-GS `diff-gaussian-rasterization` extension.
+- SAM 3 multiview wrapper can run through the official Hugging Face
+  Transformers backend or the cloned `facebookresearch/sam3` repo backend.
+- Staged H100 Slurm scripts exist for geometry, GSRecon/GSVAE reconstruction,
+  and SAM 3 segmentation.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
@@ -67,8 +73,10 @@ python3 -m latent_void validate-config --config configs/inpaint360gs_example.yam
 python3 -m latent_void run --config configs/inpaint360gs_example.yaml --dry-run
 bash -n scripts/pull_zaratan.sh scripts/push_main.sh slurm/zaratan_smoke.sbatch slurm/zaratan_inpaint.sbatch
 bash -n scripts/setup_zaratan_deps.sh scripts/download_inpaint360gs.sh
+bash -n slurm/zaratan_smoke.sbatch slurm/zaratan_inpaint.sbatch slurm/zaratan_geometry.sbatch slurm/zaratan_reconstruct.sbatch slurm/zaratan_segment.sbatch
 python3 -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_bag_dry --dry-run
 python3 -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_bag_geometry_dry --dry-run
+python3 -m py_compile latent_void/geometry.py latent_void/pipeline.py latent_void/cli.py tools/preprocess_geometry.py tools/run_gsrecon_export.py tools/run_sam3_multiview.py
 ```
 
 Zaratan commands that passed on the login node:
@@ -97,6 +105,10 @@ python scripts/check_sam3_access.py --download
 - The installed DiffSplat and SAM 3 wrappers are wired to real Zaratan paths.
 - DiffSplat scene exporter is implemented but not yet H100-tested with the full
   DiffSplat GPU dependency stack.
+- The heavy dependency setup that compiles DiffSplat's Gaussian rasterizer is
+  added but not yet validated on Zaratan.
+- The SAM 3 Transformers/repo backend auto-selection is implemented but not yet
+  H100-tested on a real image.
 - Research-quality latent inpainting logic is not complete yet.
 - Zaratan SSH clone from GitHub failed due to missing public-key auth.
 - Zaratan HTTPS clone/pull works.
@@ -138,20 +150,21 @@ Generated local dry-run artifacts are ignored by Git under `runs/`.
 
 ## Next Best Step
 
-Resolve credentials and model-adapter blockers:
-
-- GSRecon scene-export adapter.
-- H100 test of Marigold geometry preprocessing and GSRecon export.
-- GSVAE latent inpainting adapter.
-
-Then run:
+Run the heavy dependency setup on Zaratan, then stage the first real H100
+bring-up:
 
 ```bash
-sbatch slurm/zaratan_smoke.sbatch configs/zaratan_inpaint360gs_bag.yaml
+INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
+sbatch slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
 ```
 
-After the smoke job succeeds, run the real configured pipeline job:
+After geometry succeeds, continue with:
 
 ```bash
-sbatch slurm/zaratan_inpaint.sbatch configs/zaratan_inpaint360gs_scene.yaml
+sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/inpaint360gs_bag_mini
+sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
 ```
+
+Remaining model-adapter blocker:
+
+- GSVAE/native latent inpainting adapter beyond the fallback plumbing fill.

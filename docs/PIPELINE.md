@@ -49,12 +49,20 @@ Current caveat: upstream DiffSplat documents GSRecon inference through issue
 discussion rather than a packaged CLI. `tools/run_gsrecon_export.py` now
 implements the expected adapter path against `geometry_manifest.json`, but it
 still needs the full DiffSplat GPU dependency stack before it can run on H100.
+The Zaratan setup script installs the RaDe-GS `diff-gaussian-rasterization`
+extension in the heavy dependency path because DiffSplat imports that renderer
+during model initialization.
 
 ### SAM 3
 
 Configured by `external.sam3_command`. It receives a JSON manifest containing
 views and output paths. It should emit one mask per view as `.npy` or image
 files under the configured mask directory.
+
+The local wrapper supports `--backend auto`, `--backend transformers`, and
+`--backend repo`. Auto mode prefers the official Hugging Face Transformers SAM3
+API and falls back to the cloned `facebookresearch/sam3` repository path. This
+keeps Zaratan usable even if one backend has a Python/CUDA dependency mismatch.
 
 ### Latent Inpainting
 
@@ -68,3 +76,6 @@ the final research-quality model.
 Use the `debug` partition for dry-run smoke checks and `gpu-h100` with
 `msml612pcs3-class` for heavy model stages. The Slurm templates are thin wrappers
 around `python3 -m latent_void` so the same configs can run locally and remotely.
+For first H100 validation, run the staged `zaratan_geometry`, `zaratan_reconstruct`,
+and `zaratan_segment` jobs with `--set project.output_dir=...` pointing at the
+same mini run directory.

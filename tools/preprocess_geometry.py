@@ -35,8 +35,17 @@ def _load_marigold(depth_model, normal_model, device):
     from diffusers import MarigoldDepthPipeline, MarigoldNormalsPipeline
 
     dtype = torch.float16 if device.startswith("cuda") else torch.float32
-    depth_pipe = MarigoldDepthPipeline.from_pretrained(depth_model, variant="fp16", torch_dtype=dtype).to(device)
-    normal_pipe = MarigoldNormalsPipeline.from_pretrained(normal_model, variant="fp16", torch_dtype=dtype).to(device)
+
+    def load_pipe(cls, model_id):
+        if dtype == torch.float16:
+            try:
+                return cls.from_pretrained(model_id, variant="fp16", torch_dtype=dtype).to(device)
+            except Exception:
+                pass
+        return cls.from_pretrained(model_id, torch_dtype=dtype).to(device)
+
+    depth_pipe = load_pipe(MarigoldDepthPipeline, depth_model)
+    normal_pipe = load_pipe(MarigoldNormalsPipeline, normal_model)
     depth_pipe.set_progress_bar_config(disable=True)
     normal_pipe.set_progress_bar_config(disable=True)
     return torch, depth_pipe, normal_pipe
@@ -73,6 +82,16 @@ def _normal_to_chw_01(normal):
     if normal.min() < -0.01:
         normal = normal * 0.5 + 0.5
     return np.transpose(np.clip(normal, 0.0, 1.0), (2, 0, 1)).astype(np.float32)
+
+
+def _resize_normal(normal, size):
+    normal = np.asarray(normal, dtype=np.float32)
+    encoded = normal * 0.5 + 0.5 if normal.min() < -0.01 else normal
+    normal_img = Image.fromarray((np.clip(encoded, 0.0, 1.0) * 255.0).astype(np.uint8))
+    resized = np.asarray(normal_img.resize(size, Image.BILINEAR), dtype=np.float32) / 255.0
+    if normal.min() < -0.01:
+        resized = resized * 2.0 - 1.0
+    return resized.astype(np.float32)
 
 
 def main():
@@ -116,8 +135,7 @@ def main():
             if depth.shape != (input_res, input_res):
                 depth = np.asarray(Image.fromarray(depth).resize((input_res, input_res), Image.BILINEAR), dtype=np.float32)
             if normal.shape[:2] != (input_res, input_res):
-                normal_img = Image.fromarray(((np.clip(normal, -1.0, 1.0) + 1.0) * 127.5).astype(np.uint8))
-                normal = np.asarray(normal_img.resize((input_res, input_res), Image.BILINEAR), dtype=np.float32) / 127.5 - 1.0
+                normal = _resize_normal(normal, (input_res, input_res))
 
             coords, intrinsics = unproject_depth_to_world(depth, view.camera, depth_scale=depth_scale)
             raw_coords.append(coords)

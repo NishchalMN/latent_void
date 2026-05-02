@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=latent-void-inpaint
+#SBATCH --job-name=latent-void-gsrecon
 #SBATCH --account=msml612pcs3-class
 #SBATCH --partition=gpu-h100
 #SBATCH --gres=gpu:h100:1
-#SBATCH --time=02:00:00
+#SBATCH --time=01:00:00
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --output=logs/%x-%j.out
@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-CONFIG="${1:-configs/inpaint360gs_example.yaml}"
+CONFIG="${1:-configs/zaratan_inpaint360gs_bag.yaml}"
 if [[ "$#" -gt 0 ]]; then
   shift
 fi
@@ -24,5 +24,5 @@ if [[ -d .venvs/latent_void_py310 ]]; then
   source .venvs/latent_void_py310/bin/activate
 fi
 
-echo "[latent_void] running full configured pipeline on $(hostname)"
-python -m latent_void run --config "${CONFIG}" "${EXTRA_ARGS[@]}"
+echo "[latent_void] running DiffSplat GSRecon/GSVAE export on $(hostname)"
+python -m latent_void reconstruct --config "${CONFIG}" "${EXTRA_ARGS[@]}"

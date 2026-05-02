@@ -32,11 +32,12 @@ sbatch slurm/zaratan_smoke.sbatch configs/inpaint360gs_example.yaml
 ## Pipeline Stages
 
 1. `discover-dataset`: inspect configured Inpaint360GS scene inputs.
-2. `reconstruct`: run the configured DiffSplat/GSRecon command.
-3. `segment`: run the configured SAM 3 command or validate provided masks.
-4. `fuse`: fuse multi-view masks into Gaussian and latent void masks.
-5. `inpaint`: run configured latent inpainting or fallback masked latent fill.
-6. `run`: execute the staged pipeline in order.
+2. `prepare-geometry`: generate Marigold depth/normals and COLMAP coordinate maps.
+3. `reconstruct`: run the configured DiffSplat/GSRecon command.
+4. `segment`: run the configured SAM 3 command or validate provided masks.
+5. `fuse`: fuse multi-view masks into Gaussian and latent void masks.
+6. `inpaint`: run configured latent inpainting or fallback masked latent fill.
+7. `run`: execute the staged pipeline in order.
 
 Every heavy external command supports `--dry-run` through the CLI so Slurm jobs
 can be validated before GPU time is spent.

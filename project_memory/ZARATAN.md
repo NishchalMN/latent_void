@@ -129,9 +129,21 @@ Install model dependencies before running Marigold or GSRecon on H100:
 INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
 ```
 
+That heavy setup installs PyTorch, SAM 3, DiffSplat requirements,
+Marigold-compatible Diffusers, Transformers, and the RaDe-GS
+`diff-gaussian-rasterization` extension required by DiffSplat imports.
+
 The zero-training geometry stage writes `runs/inpaint360gs_bag/geometry/geometry_manifest.json`.
 The GSRecon export stage consumes that manifest and writes `gaussians.npz`,
 `gs_grid.npy`, and `latent.npy`.
+
+Staged H100 bring-up:
+
+```bash
+sbatch slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/inpaint360gs_bag_mini
+sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+```
 
 ## Real Job Command
 

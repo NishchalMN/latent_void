@@ -18,6 +18,17 @@ clone_or_update() {
   fi
 }
 
+clone_or_update_recursive() {
+  local url="$1"
+  local dst="$2"
+  if [[ -d "${dst}/.git" ]]; then
+    git -C "${dst}" pull --ff-only || true
+    git -C "${dst}" submodule update --init --recursive
+  else
+    git clone --recursive --depth 1 "${url}" "${dst}"
+  fi
+}
+
 clone_or_update https://github.com/chenguolin/DiffSplat.git external/DiffSplat
 clone_or_update https://github.com/facebookresearch/sam3.git external/sam3
 clone_or_update https://github.com/dfki-av/Inpaint360GS.git external/Inpaint360GS
@@ -38,6 +49,11 @@ if [[ "${INSTALL_GPU_DEPS:-0}" == "1" ]]; then
   python -m pip install torch torchvision --index-url "${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cu128}"
   python -m pip install -e external/sam3
   python -m pip install -r external/DiffSplat/settings/requirements.txt
+  python -m pip install "${MARIGOLD_DIFFUSERS_SPEC:-diffusers>=0.34,<0.36}" transformers accelerate safetensors
+  mkdir -p external/DiffSplat/extensions
+  clone_or_update_recursive https://github.com/BaowenZ/RaDe-GS.git external/DiffSplat/extensions/RaDe-GS
+  export MAX_JOBS="${MAX_JOBS:-4}"
+  python -m pip install external/DiffSplat/extensions/RaDe-GS/submodules/diff-gaussian-rasterization
 fi
 
 DIFFSPLAT_CKPT_DIR="${DIFFSPLAT_CKPT_DIR:-${ROOT}/checkpoints/diffsplat}"

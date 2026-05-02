@@ -11,6 +11,10 @@
 set -euo pipefail
 
 CONFIG="${1:-configs/inpaint360gs_example.yaml}"
+if [[ "$#" -gt 0 ]]; then
+  shift
+fi
+EXTRA_ARGS=("$@")
 mkdir -p logs
 
 module load python/3.10.10/gcc/11.3.0/cuda/12.3.0/linux-rhel8-zen2
@@ -22,8 +26,8 @@ fi
 echo "[latent_void] running on $(hostname)"
 echo "[latent_void] config: ${CONFIG}"
 
-python -m latent_void validate-config --config "${CONFIG}"
-python -m latent_void discover-dataset --config "${CONFIG}"
-python -m latent_void prepare-geometry --config "${CONFIG}" --dry-run
-python -m latent_void reconstruct --config "${CONFIG}" --dry-run
-python -m latent_void segment --config "${CONFIG}" --dry-run
+python -m latent_void validate-config --config "${CONFIG}" "${EXTRA_ARGS[@]}"
+python -m latent_void discover-dataset --config "${CONFIG}" "${EXTRA_ARGS[@]}"
+python -m latent_void prepare-geometry --config "${CONFIG}" "${EXTRA_ARGS[@]}" --dry-run
+python -m latent_void reconstruct --config "${CONFIG}" "${EXTRA_ARGS[@]}" --dry-run
+python -m latent_void segment --config "${CONFIG}" "${EXTRA_ARGS[@]}" --dry-run

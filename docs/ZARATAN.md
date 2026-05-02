@@ -42,9 +42,24 @@ time.
 `scripts/setup_zaratan_deps.sh` clones/updates DiffSplat, SAM 3, and
 Inpaint360GS. It also downloads DiffSplat's PixArt-Sigma checkpoint bundle when
 missing. Set `INSTALL_GPU_DEPS=1` for the heavier PyTorch/SAM3/DiffSplat Python
-package install; the default path stays lightweight for config and dataset
-validation. The script intentionally does not self-upgrade `pip` inside the
-active Zaratan venv.
+package install. That heavy path also installs Marigold-compatible Diffusers and
+DiffSplat's RaDe-GS `diff-gaussian-rasterization` extension. The default path
+stays lightweight for config and dataset validation. The script intentionally
+does not self-upgrade `pip` inside the active Zaratan venv.
+
+## Staged H100 Jobs
+
+Use the staged jobs while bringing up the real pipeline:
+
+```bash
+sbatch slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/inpaint360gs_bag_mini
+sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+```
+
+The first command runs the zero-training Marigold geometry preprocessing. The
+second consumes `geometry_manifest.json` and runs DiffSplat GSRecon/GSVAE. The
+third runs SAM 3 masks for the configured prompt.
 
 ## Real Job
 
@@ -72,6 +87,9 @@ Default Slurm settings:
 - SAM 3 checkpoint download requires Hugging Face authentication and access to
   the `facebook/sam3` model repo. Run `hf auth login` in the Zaratan environment
   before using `tools/run_sam3_multiview.py`.
+- `tools/run_sam3_multiview.py` supports both the local `facebookresearch/sam3`
+  repo backend and the official Hugging Face Transformers backend. `--backend
+  auto` tries Transformers first and falls back to the repo backend.
 - Check access with:
 
   ```bash
