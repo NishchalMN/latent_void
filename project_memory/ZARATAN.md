@@ -162,6 +162,11 @@ Current geometry bring-up:
   at the latest check.
 - `squeue --start -j 19185139` estimated start time:
   `2026-05-03T04:03:32` on `gpu-a6-9`.
+- Dependent continuation chain:
+  - `19186465`: reconstruct after `19185139`
+  - `19186466`: SAM 3 segmentation after `19186465`
+  - `19186467`: skip-heavy final run after `19186466`; does fuse, fallback
+    inpaint, and render diagnostics.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled; the active
   bring-up target is `19185139` on `gpu-h100`.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
@@ -169,10 +174,8 @@ Current geometry bring-up:
 - A non-submitting `sbatch --test-only --partition=gpu --gres=gpu:h100:1`
   check estimated `2026-05-03T23:53:18`, which is later than the active
   `gpu-h100` job. Keep `19185139`.
-- Zaratan has pulled `bdd8535`; post-pull unit tests, py_compile, and
-  `configs/zaratan_inpaint360gs_bag.yaml` dry-run passed.
-- Zaratan must pull the current GitHub commit before `19185139` starts so the
-  queued job sees the Marigold depth squeeze plus SAM/latent mask grid fixes.
+- Zaratan has pulled `1b240bf`; post-pull unit tests, py_compile, full dry-run,
+  and render dry-run passed.
 
 ## Quota Note
 

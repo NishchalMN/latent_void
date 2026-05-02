@@ -13,10 +13,8 @@ Last updated: 2026-05-02
   `/home/gnanesh/scratch.msml612pcs3/latent_void`
 - Branch:
   `main`
-- Latest pushed repo commit before this status update:
-  `bdd8535 Document mask grid alignment runbook`
-- Latest pushed code commit:
-  `02218cd Align geometry and mask shapes for GSRecon`
+- Latest pushed repo/code commit before this queue-state update:
+  `1b240bf Add GSVAE latent render diagnostics`
 
 Implemented and verified locally:
 
@@ -148,12 +146,14 @@ Latest Zaratan post-pull validation:
 ```bash
 git pull --ff-only
 python -m unittest discover -s tests
-python -m py_compile tools/preprocess_geometry.py tools/run_sam3_multiview.py tools/run_gsrecon_export.py latent_void/latent.py latent_void/pipeline.py latent_void/masks.py latent_void/gaussians.py
+python -m py_compile tools/preprocess_geometry.py tools/run_sam3_multiview.py tools/run_gsrecon_export.py tools/render_latent_scene.py latent_void/latent.py latent_void/pipeline.py latent_void/masks.py latent_void/gaussians.py
 python -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_bag_postpull_dry --dry-run
+python -m latent_void render --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_render_postpull_dry --dry-run
 ```
 
 Result: 17 tests passed; post-pull dry-run rendered geometry, GSRecon, and SAM
-3 commands correctly, including `--resize-to 256` for SAM masks.
+3 commands correctly, including `--resize-to 256` for SAM masks. Render dry-run
+also produced the expected `tools/render_latent_scene.py` command.
 
 ## What Fails Or Is Not Ready
 
@@ -170,6 +170,14 @@ Result: 17 tests passed; post-pull dry-run rendered geometry, GSRecon, and SAM
   - reason: `Priority`
   - `squeue --start` estimate at the latest check:
     `2026-05-03T04:03:32` on `gpu-a6-9`
+- Dependent continuation chain is queued against `19185139`:
+  - `19186465`: `latent-void-gsrecon`, dependency `afterok:19185139`
+  - `19186466`: `latent-void-sam3`, dependency `afterok:19186465`
+  - `19186467`: `latent-void-inpaint`, dependency `afterok:19186466`
+  - final job runs `python -m latent_void run` with
+    `--skip-geometry --skip-reconstruct --skip-segment`, so it performs fusion,
+    fallback latent inpaint plumbing, and render diagnostics from the staged
+    outputs.
 - Backup A100 geometry job was briefly submitted with a separate output directory
   and then canceled so the bring-up stays focused on H100:
   - job id: `19185424`
@@ -273,15 +281,10 @@ tail -120 logs/latent-void-geom-19185139.err
 ```
 
 Zaratan has already pulled the latest GitHub commit and passed post-pull tests,
-so the queued Slurm job should use the mask/grid-alignment fixes.
-
-After geometry succeeds, continue with:
-
-```bash
-sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/inpaint360gs_bag_mini
-sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
-sbatch slurm/zaratan_render.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
-```
+so the queued Slurm job should use the mask/grid-alignment and render fixes.
+The dependent continuation chain is already submitted; after geometry starts,
+watch the four queued job IDs above rather than manually resubmitting duplicate
+jobs.
 
 Remaining model-adapter blocker:
 
