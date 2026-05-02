@@ -14,7 +14,7 @@ Last updated: 2026-05-02
 - Branch:
   `main`
 - Latest pushed commit before this memory update:
-  `6942682 Keep dry-run imports lightweight`
+  `a91b4ac Run smoke job on CPU debug partition`
 
 Implemented and verified locally:
 
@@ -35,6 +35,7 @@ Implemented and verified locally:
   - Inpaint360GS
 - Zaratan lightweight Python 3.10 environment created at
   `.venvs/latent_void_py310`.
+- Zaratan venv has NumPy pinned to `1.26.4` after setup.
 - Inpaint360GS core dataset downloaded to
   `data/downloads/inpaint360.zip`.
 - Inpaint360GS core dataset unpacked under `data/inpaint360` after rerunning
@@ -44,6 +45,12 @@ Implemented and verified locally:
   - `gsrecon_gobj265k_cnp_even4`
   - `gsvae_gobj265k_sdxl_fp16`
   - `gsdiff_gobj83k_pas_fp16__render`
+- Inpaint360GS `bag` scene discovery works on Zaratan:
+  - `num_images`: 156
+  - selected views with current config: 16
+  - COLMAP cameras loaded from binary `sparse/0`
+  - first selected view: `IMG_0087`
+  - last selected view: `IMG_0102`
 
 Local commands that passed:
 
@@ -52,6 +59,7 @@ python3 -m unittest discover -s tests
 python3 -m latent_void validate-config --config configs/inpaint360gs_example.yaml
 python3 -m latent_void run --config configs/inpaint360gs_example.yaml --dry-run
 bash -n scripts/pull_zaratan.sh scripts/push_main.sh slurm/zaratan_smoke.sbatch slurm/zaratan_inpaint.sbatch
+bash -n scripts/setup_zaratan_deps.sh scripts/download_inpaint360gs.sh
 ```
 
 Zaratan commands that passed on the login node:
@@ -61,11 +69,19 @@ cd /home/gnanesh/scratch.msml612pcs3/latent_void
 git pull --ff-only
 python3 -m latent_void validate-config --config configs/inpaint360gs_example.yaml
 python3 -m latent_void run --config configs/inpaint360gs_example.yaml --dry-run
+scripts/setup_zaratan_deps.sh
+scripts/download_inpaint360gs.sh
+python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml --strict-paths
+python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
 ```
 
 ## What Fails Or Is Not Ready
 
 - No real H100 job has been submitted yet.
+- Slurm smoke job was submitted twice and canceled while pending:
+  - first used the old `gpu-h100` smoke template and was pending for priority.
+  - second used the new `debug` CPU template and was pending for resources.
+  - no smoke job is left queued.
 - `configs/zaratan_inpaint360gs_bag.yaml` points at the downloaded Zaratan
   dataset/repo/checkpoint locations.
 - The installed DiffSplat and SAM 3 wrappers are wired to real Zaratan paths,
@@ -115,11 +131,10 @@ Generated local dry-run artifacts are ignored by Git under `runs/`.
 
 ## Next Best Step
 
-Validate the Inpaint360GS scene discovery on Zaratan, then resolve credentials
-and model-environment blockers:
+Resolve credentials and model-adapter blockers:
 
-- GSRecon weights.
-- GSVAE weights.
+- GSRecon scene-export adapter.
+- GSVAE latent inpainting adapter.
 - SAM 3 Hugging Face auth/checkpoints.
 - Normal/coordinate-map strategy for DiffSplat GSRecon scene encoding.
 
