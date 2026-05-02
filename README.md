@@ -9,9 +9,9 @@ multiple views, fuses the masks into a true 3D void, and inpaints the void in
 latent/Gaussian space.
 
 This repository intentionally keeps heavyweight model code behind adapters.
-Local development can validate configs, masks, latent shapes, Slurm scripts, and
-orchestration without installing DiffSplat or SAM 3. Zaratan/H100 jobs provide
-the real model commands through config values.
+Local development can validate configs, masks, latent shapes, H100 command
+rendering, and orchestration without installing DiffSplat or SAM 3.
+Zaratan/H100 runs provide the real model commands through config values.
 
 ## Quick Start
 
@@ -26,7 +26,8 @@ On Zaratan:
 cd /home/gnanesh/scratch.msml612pcs3/latent_void
 git pull
 python3 -m latent_void validate-config --config configs/inpaint360gs_example.yaml
-sbatch slurm/zaratan_smoke.sbatch configs/inpaint360gs_example.yaml
+scripts/zaratan_srun_stage.sh geometry configs/zaratan_inpaint360gs_bag.yaml \
+  --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
 ```
 
 ## Pipeline Stages
@@ -39,8 +40,8 @@ sbatch slurm/zaratan_smoke.sbatch configs/inpaint360gs_example.yaml
 6. `inpaint`: run configured latent inpainting or fallback masked latent fill.
 7. `run`: execute the staged pipeline in order.
 
-Every heavy external command supports `--dry-run` through the CLI so Slurm jobs
-can be validated before GPU time is spent.
+Every heavy external command supports `--dry-run` through the CLI so direct
+`srun` commands can be validated before GPU time is spent.
 
 ## Configure a Real Run
 

@@ -13,8 +13,8 @@ Last updated: 2026-05-02
   `/home/gnanesh/scratch.msml612pcs3/latent_void`
 - Branch:
   `main`
-- Latest pushed repo/code commit before this queue-state update:
-  `1b240bf Add GSVAE latent render diagnostics`
+- Latest pushed repo/code commit before the current `srun` wrapper update:
+  `9eafb28 Use local Marigold snapshots on Zaratan`
 
 Implemented and verified locally:
 
@@ -53,14 +53,14 @@ Implemented and verified locally:
   Zaratan config points at local `checkpoints/marigold/depth-v1-1` and
   `checkpoints/marigold/normals-v1-1` paths so Slurm jobs do not rely on
   compute-node network access to Hugging Face.
-- Staged H100 Slurm scripts exist for geometry, GSRecon/GSVAE reconstruction,
-  SAM 3 segmentation, and latent render diagnostics.
+- `scripts/zaratan_srun_stage.sh` now runs staged H100 geometry,
+  GSRecon/GSVAE reconstruction, SAM 3 segmentation, and final
+  fuse/inpaint/render diagnostics through direct interactive `srun`.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
-- Slurm templates for smoke and inpainting jobs.
-- Smoke Slurm template uses the short CPU `debug` partition; real inpainting
-  still uses `gpu-h100`.
+- Legacy Slurm templates remain in `slurm/`, but the active Zaratan workflow
+  prefers direct `srun` from tmux.
 - Zaratan runbook and pipeline docs.
 - Official external repos cloned on Zaratan under `external/`:
   - DiffSplat
@@ -113,6 +113,7 @@ python3 -m latent_void run --config configs/inpaint360gs_example.yaml --dry-run
 bash -n scripts/pull_zaratan.sh scripts/push_main.sh slurm/zaratan_smoke.sbatch slurm/zaratan_inpaint.sbatch
 bash -n scripts/setup_zaratan_deps.sh scripts/download_inpaint360gs.sh
 bash -n slurm/zaratan_smoke.sbatch slurm/zaratan_inpaint.sbatch slurm/zaratan_geometry.sbatch slurm/zaratan_reconstruct.sbatch slurm/zaratan_segment.sbatch
+bash -n scripts/zaratan_srun_stage.sh
 python3 -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_bag_dry --dry-run
 python3 -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_bag_geometry_dry --dry-run
 python3 -m py_compile latent_void/geometry.py latent_void/pipeline.py latent_void/cli.py tools/preprocess_geometry.py tools/run_gsrecon_export.py tools/run_sam3_multiview.py
@@ -271,6 +272,7 @@ also produced the expected `tools/render_latent_scene.py` command.
 Local files:
 
 - `configs/inpaint360gs_example.yaml`
+- `scripts/zaratan_srun_stage.sh`
 - `slurm/zaratan_smoke.sbatch`
 - `slurm/zaratan_inpaint.sbatch`
 - `docs/PIPELINE.md`
@@ -281,15 +283,15 @@ Generated local dry-run artifacts are ignored by Git under `runs/`.
 
 ## Next Best Step
 
-Download local Marigold snapshots on Zaratan, then resubmit the staged H100
-chain:
+Continue the live direct `srun` H100 bring-up in the `zaratan` tmux session.
+Current run directory:
 
 ```bash
-python scripts/download_marigold.py --output-dir checkpoints/marigold
+runs/inpaint360gs_bag_srun_h100
 ```
 
-Then submit geometry, reconstruct, SAM 3, and final fuse/inpaint/render with
-`afterok` dependencies again.
+Run stages sequentially with `scripts/zaratan_srun_stage.sh`: `geometry`,
+`reconstruct`, `segment`, then `finish`.
 
 Remaining model-adapter blocker:
 

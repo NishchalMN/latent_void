@@ -33,12 +33,10 @@ python scripts/download_marigold.py --output-dir checkpoints/marigold
 python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml
 python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
 python -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --dry-run
-sbatch slurm/zaratan_smoke.sbatch configs/zaratan_inpaint360gs_bag.yaml
 ```
 
-The smoke job only validates config, dataset discovery, and dry-run command
-rendering. It runs on the short CPU `debug` partition and should not spend GPU
-time.
+These smoke checks validate config, dataset discovery, and dry-run command
+rendering before spending GPU time.
 
 `scripts/setup_zaratan_deps.sh` clones/updates DiffSplat, SAM 3, and
 Inpaint360GS. It also downloads DiffSplat's PixArt-Sigma checkpoint bundle when
@@ -48,15 +46,17 @@ DiffSplat's RaDe-GS `diff-gaussian-rasterization` extension. The default path
 stays lightweight for config and dataset validation. The script intentionally
 does not self-upgrade `pip` inside the active Zaratan venv.
 
-## Staged H100 Jobs
+## Staged H100 `srun` Jobs
 
-Use the staged jobs while bringing up the real pipeline:
+Use direct `srun` stages in the `zaratan` tmux session while bringing up the
+real pipeline. The wrapper keeps the command interactive and defaults to the
+`msml612pcs3-class` account, `gpu-h100` partition, and `gpu:h100:1` GRES:
 
 ```bash
-sbatch slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
-sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/inpaint360gs_bag_mini
-sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
-sbatch slurm/zaratan_render.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+scripts/zaratan_srun_stage.sh geometry configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
+scripts/zaratan_srun_stage.sh reconstruct configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
+scripts/zaratan_srun_stage.sh segment configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
+scripts/zaratan_srun_stage.sh finish configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
 ```
 
 The first command runs the zero-training Marigold geometry preprocessing. The
@@ -70,7 +70,9 @@ partition and the GPU type; overriding only the partition leaves the H100 GRES
 request in place:
 
 ```bash
-sbatch --partition=gpu-a100 --gres=gpu:a100:1 slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini_a100
+SLURM_PARTITION=gpu-a100 SLURM_GRES=gpu:a100:1 \
+  scripts/zaratan_srun_stage.sh geometry configs/zaratan_inpaint360gs_bag.yaml \
+  --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini_a100
 ```
 
 ## Real Job
@@ -84,15 +86,15 @@ cp configs/inpaint360gs_example.yaml configs/my_scene.yaml
 Then run:
 
 ```bash
-sbatch slurm/zaratan_inpaint.sbatch configs/my_scene.yaml
+scripts/zaratan_srun_stage.sh run configs/my_scene.yaml
 ```
 
 Default Slurm settings:
 
 - account: `msml612pcs3-class`
-- smoke partition: `debug`
-- real inpaint partition: `gpu-h100`
-- real inpaint GRES: `gpu:h100:1`
+- partition: `gpu-h100`
+- GRES: `gpu:h100:1`
+- CPU/memory defaults: 8 CPUs and 64 GB memory per stage
 
 ## Quota And Group Notes
 

@@ -106,14 +106,13 @@ scripts/download_inpaint360gs.sh
 python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml --strict-paths
 python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
 python -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --dry-run
-sbatch slurm/zaratan_smoke.sbatch configs/zaratan_inpaint360gs_bag.yaml
 ```
 
 Latest login-node discovery result for `bag`: 156 images, 16 selected views,
 COLMAP cameras found.
 
-The latest `debug` smoke Slurm job was canceled while pending for resources, so
-no smoke job is currently queued.
+The older `debug` smoke Slurm job was canceled while pending for resources.
+Current bring-up uses direct `srun` commands in the `zaratan` tmux session.
 
 ## Heavy Geometry/Model Setup
 
@@ -143,19 +142,21 @@ The zero-training geometry stage writes `runs/inpaint360gs_bag/geometry/geometry
 The GSRecon export stage consumes that manifest and writes `gaussians.npz`,
 `gs_grid.npy`, and `latent.npy`.
 
-Staged H100 bring-up:
+Staged H100 bring-up now uses direct `srun`:
 
 ```bash
-sbatch slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
-sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/inpaint360gs_bag_mini
-sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
-sbatch slurm/zaratan_render.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+scripts/zaratan_srun_stage.sh geometry configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
+scripts/zaratan_srun_stage.sh reconstruct configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
+scripts/zaratan_srun_stage.sh segment configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
+scripts/zaratan_srun_stage.sh finish configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
 ```
 
 If submitting an A100 backup, override both partition and GRES:
 
 ```bash
-sbatch --partition=gpu-a100 --gres=gpu:a100:1 slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini_a100
+SLURM_PARTITION=gpu-a100 SLURM_GRES=gpu:a100:1 \
+  scripts/zaratan_srun_stage.sh geometry configs/zaratan_inpaint360gs_bag.yaml \
+  --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini_a100
 ```
 
 Current geometry bring-up:
@@ -177,6 +178,10 @@ Current geometry bring-up:
   0 MiB GPU usage, and no geometry files. Treat that as a Marigold model
   resolution/download stall on the compute node. Use local
   `checkpoints/marigold/*` snapshots before resubmitting.
+- Local Marigold snapshots are now present under `checkpoints/marigold`.
+- `19186495` is the direct `srun` geometry attempt for
+  `runs/inpaint360gs_bag_srun_h100`; it was queued after switching away from
+  `sbatch` dependency chains.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.
@@ -206,5 +211,5 @@ explicitly repaired.
 After creating a real config:
 
 ```bash
-sbatch slurm/zaratan_inpaint.sbatch configs/zaratan_inpaint360gs_scene.yaml
+scripts/zaratan_srun_stage.sh run configs/zaratan_inpaint360gs_scene.yaml
 ```

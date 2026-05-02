@@ -62,14 +62,16 @@ Reason:
 The local workspace should remain lightweight. Zaratan H100 jobs will call
 configured external repositories and checkpoints.
 
-## D007: Use `msml612pcs3-class` By Default On Zaratan
+## D007: Use Direct H100 `srun` On Zaratan
 
 Decision:
-Slurm templates default to `msml612pcs3-class` and `gpu-h100`.
+The active Zaratan workflow uses direct `srun` commands from the `zaratan` tmux
+session, defaulting to `msml612pcs3-class`, `gpu-h100`, and `gpu:h100:1`.
 
 Reason:
-The Zaratan balance showed substantially more unused allocation there than the
-other visible account.
+The Zaratan balance showed substantially more unused allocation on that account,
+and direct `srun` keeps H100 bring-up interactive and easier to diagnose than
+detached dependency chains.
 
 ## D008: Parse Inpaint360GS COLMAP Metadata Locally
 

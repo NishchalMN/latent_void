@@ -105,9 +105,10 @@ run's render folder.
 
 ## Zaratan
 
-Use the `debug` partition for dry-run smoke checks and `gpu-h100` with
-`msml612pcs3-class` for heavy model stages. The Slurm templates are thin wrappers
-around `python3 -m latent_void` so the same configs can run locally and remotely.
-For first H100 validation, run the staged `zaratan_geometry`, `zaratan_reconstruct`,
-`zaratan_segment`, and `zaratan_render` jobs with `--set project.output_dir=...`
-pointing at the same mini run directory.
+Use login-node dry runs for smoke checks and direct `srun` allocations on
+`gpu-h100` with `msml612pcs3-class` for heavy model stages. The preferred
+Zaratan wrapper is `scripts/zaratan_srun_stage.sh`, which runs the same
+`python -m latent_void` stages interactively inside the `zaratan` tmux session.
+For first H100 validation, run `geometry`, `reconstruct`, `segment`, and
+`finish` with `--set project.output_dir=...` pointing at the same mini run
+directory.
