@@ -146,11 +146,13 @@ def _run_model(args, manifest):
         opacity = model_outputs["opacity"] * 0.5 + 0.5
         rotation = model_outputs["rotation"]
 
-    _, _, _, height, width = model_outputs["rgb"].shape
+    batch_size, num_input_views, _, height, width = model_outputs["rgb"].shape
     positions = rearrange(xyz, "b v c h w -> (b v h w) c").detach().cpu().numpy().astype(np.float32)
     uvs, visibility = _project_points(positions, tensors["all_C2W_np"], tensors["all_fxfycxcy_np"], height, width)
-    np.save(os.path.join(args.output_dir, "latent.npy"), latent_scaled.detach().cpu().numpy().astype(np.float32))
-    np.save(os.path.join(args.output_dir, "gs_grid.npy"), gs_grid.detach().cpu().numpy().astype(np.float32))
+    latent_np = latent_scaled.detach().cpu().numpy().astype(np.float32)
+    gs_grid_np = gs_grid.detach().cpu().numpy().astype(np.float32)
+    np.save(os.path.join(args.output_dir, "latent.npy"), latent_np)
+    np.save(os.path.join(args.output_dir, "gs_grid.npy"), gs_grid_np)
     np.savez_compressed(
         os.path.join(args.output_dir, "gaussians.npz"),
         positions=positions,
@@ -160,6 +162,9 @@ def _run_model(args, manifest):
         opacity=rearrange(opacity, "b v c h w -> (b v h w) c").detach().cpu().numpy().astype(np.float32),
         uvs=uvs,
         visibility=visibility,
+        gaussian_grid_shape=np.asarray([batch_size, num_input_views, height, width], dtype=np.int32),
+        latent_shape=np.asarray(latent_np.shape, dtype=np.int32),
+        gs_grid_shape=np.asarray(gs_grid_np.shape, dtype=np.int32),
         input_view_ids=np.asarray(tensors["input_view_ids"]),
         all_view_ids=np.asarray(tensors["all_view_ids"]),
     )

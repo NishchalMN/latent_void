@@ -15,7 +15,7 @@ if REPO_ROOT not in sys.path:
 
 from latent_void.config import get_nested, load_config
 from latent_void.datasets import Inpaint360GSDataset
-from latent_void.geometry import normalize_coordinate_maps, unproject_depth_to_world
+from latent_void.geometry import encode_coordinate_maps, normalize_camera_set, unproject_depth_to_world
 from latent_void.io import ensure_dir, write_json
 
 
@@ -64,6 +64,8 @@ def _prediction_array(prediction):
         array = array[0]
     if array.ndim == 3 and array.shape[0] == 1:
         array = array[0]
+    if array.ndim == 3 and array.shape[-1] == 1:
+        array = array[..., 0]
     if array.ndim == 3 and array.shape[0] == 3:
         array = np.transpose(array, (1, 2, 0))
     return array.astype(np.float32)
@@ -99,6 +101,16 @@ def _resize_normal(normal, size):
     return resized.astype(np.float32)
 
 
+def _as_bool(value):
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
 def main():
     args = parse_args()
     config = load_config(args.config)
@@ -111,9 +123,18 @@ def main():
     num_inference_steps = args.num_inference_steps or int(geometry_config.get("num_inference_steps", 4))
     ensemble_size = args.ensemble_size or int(geometry_config.get("ensemble_size", 1))
     depth_scale = args.depth_scale if args.depth_scale is not None else float(geometry_config.get("depth_scale", 5.0))
+    normalize_cameras = _as_bool(geometry_config.get("normalize_cameras", True))
+    camera_norm_radius = float(geometry_config.get("camera_norm_radius", 1.4))
+    coord_mode = geometry_config.get("coord_mode", "scene_minmax")
 
     dataset = Inpaint360GSDataset(config)
     views = dataset.views(max_views=max_views)
+    cameras = [view.camera for view in views]
+    if normalize_cameras:
+        normalized_cameras, camera_normalization = normalize_camera_set(cameras, norm_radius=camera_norm_radius)
+    else:
+        normalized_cameras = cameras
+        camera_normalization = {"enabled": False, "reason": "disabled by config"}
     ensure_dir(args.output_dir)
     if args.dry_run:
         result = {
@@ -122,6 +143,8 @@ def main():
             "output_dir": args.output_dir,
             "depth_model": depth_model,
             "normal_model": normal_model,
+            "camera_normalization": camera_normalization,
+            "coord_mode": coord_mode,
         }
         write_json(os.path.join(args.output_dir, "geometry_command.json"), result)
         print(json.dumps(result, indent=2))
@@ -131,7 +154,7 @@ def main():
     raw_coords = []
     entries = []
     with torch.inference_mode():
-        for idx, view in enumerate(views):
+        for idx, (view, camera) in enumerate(zip(views, normalized_cameras)):
             image = Image.open(view.image_path).convert("RGB").resize((input_res, input_res), Image.BICUBIC)
             depth_output = depth_pipe(image, num_inference_steps=num_inference_steps, ensemble_size=ensemble_size)
             normal_output = normal_pipe(image, num_inference_steps=num_inference_steps, ensemble_size=ensemble_size)
@@ -142,7 +165,7 @@ def main():
             if normal.shape[:2] != (input_res, input_res):
                 normal = _resize_normal(normal, (input_res, input_res))
 
-            coords, intrinsics = unproject_depth_to_world(depth, view.camera, depth_scale=depth_scale)
+            coords, intrinsics = unproject_depth_to_world(depth, camera, depth_scale=depth_scale)
             raw_coords.append(coords)
             stem = "%04d_%s" % (idx, view.view_id)
             entry = {
@@ -152,12 +175,13 @@ def main():
                 "depth_npy": _save_array(os.path.join(args.output_dir, stem + "_depth.npy"), depth[None, ...]),
                 "normal_npy": _save_array(os.path.join(args.output_dir, stem + "_normal.npy"), _normal_to_chw_01(normal)),
                 "coord_raw_npy": _save_array(os.path.join(args.output_dir, stem + "_coord_raw.npy"), np.transpose(coords, (2, 0, 1))),
-                "camera": view.camera,
+                "camera": camera,
+                "source_camera": view.camera,
                 "scaled_intrinsics": intrinsics,
             }
             entries.append(entry)
 
-    normalized_coords, coord_stats = normalize_coordinate_maps(raw_coords)
+    normalized_coords, coord_stats = encode_coordinate_maps(raw_coords, mode=coord_mode)
     for entry, coords in zip(entries, normalized_coords):
         coord_path = entry["coord_raw_npy"].replace("_coord_raw.npy", "_coord.npy")
         entry["coord_npy"] = _save_array(coord_path, np.transpose(coords, (2, 0, 1)))
@@ -173,6 +197,7 @@ def main():
         "num_inference_steps": num_inference_steps,
         "ensemble_size": ensemble_size,
         "depth_scale": depth_scale,
+        "camera_normalization": camera_normalization,
         "coord_normalization": coord_stats,
         "views": entries,
     }

@@ -33,6 +33,20 @@ class MaskTests(unittest.TestCase):
         offset = shadow_offset(obj, shadow)
         self.assertTrue(np.allclose(offset, np.array([2.0, 1.0], dtype=np.float32)))
 
+    def test_resize_mask_uses_nearest_binary_values(self):
+        try:
+            from tools.run_sam3_multiview import _resize_mask
+        except ModuleNotFoundError as exc:
+            if exc.name == "PIL":
+                self.skipTest("Pillow is not installed in the local smoke environment")
+            raise
+        mask = np.zeros((4, 4), dtype=bool)
+        mask[:2, :2] = True
+        resized = _resize_mask(mask, 2)
+        self.assertEqual(resized.shape, (2, 2))
+        self.assertTrue(resized[0, 0])
+        self.assertFalse(resized[1, 1])
+
 
 if __name__ == "__main__":
     unittest.main()

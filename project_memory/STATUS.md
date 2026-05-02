@@ -24,6 +24,10 @@ Implemented and verified locally:
 - SAM 3 external command dry-run rendering.
 - Marigold geometry preprocessing command dry-run rendering.
 - Local coordinate-map reprojection from COLMAP cameras and depth maps.
+- Geometry preprocessing now normalizes COLMAP camera poses into a
+  DiffSplat-like object-scale frame before writing Plucker/coordinate inputs.
+  It supports both scene min/max coordinate encoding and DiffSplat's
+  `coord * 0.5 + 0.5` style encoding.
 - GSRecon export adapter now accepts `geometry_manifest.json` and is able to
   export `gaussians.npz`, `gs_grid.npy`, and `latent.npy` once DiffSplat GPU
   dependencies are available.
@@ -31,6 +35,8 @@ Implemented and verified locally:
   Diffusers plus DiffSplat's RaDe-GS `diff-gaussian-rasterization` extension.
 - SAM 3 multiview wrapper can run through the official Hugging Face
   Transformers backend or the cloned `facebookresearch/sam3` repo backend.
+- SAM 3 masks are resized to the geometry input resolution in the Zaratan
+  command so mask fusion uses the same pixel grid as projected Gaussians.
 - Staged H100 Slurm scripts exist for geometry, GSRecon/GSVAE reconstruction,
   and SAM 3 segmentation.
 - Multi-view mask fusion with synthetic projected Gaussian data.
@@ -124,11 +130,17 @@ INSTALL_GPU_DEPS=1 DOWNLOAD_DIFFSPLAT_CKPTS=0 MAX_JOBS=4 scripts/setup_zaratan_d
   - partition: `gpu-h100`
   - state at latest check: `PENDING`
   - reason: `Priority`
+  - `squeue --start` estimate at the latest check:
+    `2026-05-03T04:03:32` on `gpu-a6-9`
 - Backup A100 geometry job was briefly submitted with a separate output directory
   and then canceled so the bring-up stays focused on H100:
   - job id: `19185424`
   - partition: `gpu-a100`
   - output: `runs/inpaint360gs_bag_mini_a100`
+  - final state at latest check: canceled / no longer in `squeue`
+- A later stray A100 submission was also canceled for the same reason:
+  - job id: `19186443`
+  - estimated start before cancellation: `2026-05-02T21:00:00`
   - final state at latest check: canceled / no longer in `squeue`
 - Zaratan file-count quota issue encountered and resolved for this working
   copy:

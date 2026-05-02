@@ -27,6 +27,7 @@ class Sam3CommandAdapter(object):
             "manifest_path": manifest_path,
             "prompt": prompt,
             "mask_dir": output_dir,
+            "mask_resize": int(get_nested(self.config, "geometry.input_res", 0) or 0),
         }
         result = run_command(get_nested(self.config, "external.sam3_command", ""), values, dry_run=dry_run)
         result["manifest_path"] = manifest_path

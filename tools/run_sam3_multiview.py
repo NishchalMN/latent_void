@@ -25,6 +25,7 @@ def parse_args():
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--score-threshold", type=float, default=0.0)
     parser.add_argument("--mask-threshold", type=float, default=0.5)
+    parser.add_argument("--resize-to", type=int, default=0)
     parser.add_argument("--backend", choices=["auto", "transformers", "repo"], default="auto")
     parser.add_argument("--device", default="cuda")
     return parser.parse_args()
@@ -158,6 +159,15 @@ def _best_result_mask(result, score_threshold):
     return np.asarray(mask).astype(bool), score, box
 
 
+def _resize_mask(mask, size):
+    mask = np.asarray(mask).astype(np.uint8)
+    if not size or mask.shape[:2] == (size, size):
+        return mask.astype(bool)
+    image = Image.fromarray(mask * 255)
+    resized = image.resize((size, size), Image.NEAREST)
+    return (np.asarray(resized) > 0).astype(bool)
+
+
 def main():
     args = parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
@@ -176,15 +186,20 @@ def main():
         for idx, view in enumerate(manifest.get("views", [])):
             image_path = view["image_path"]
             image = Image.open(image_path).convert("RGB")
+            original_size = [image.width, image.height]
             mask, score, box = segment(image, args.prompt, args.mask_threshold)
             mask_path = os.path.join(args.output_dir, "%04d.npy" % idx)
             if mask is None:
                 mask = np.zeros((image.height, image.width), dtype=np.uint8)
+            if args.resize_to:
+                mask = _resize_mask(mask, args.resize_to)
             np.save(mask_path, mask.astype(np.uint8))
             results.append({
                 "view_id": view.get("view_id"),
                 "image_path": image_path,
                 "mask_path": mask_path,
+                "original_size": original_size,
+                "mask_shape": list(mask.shape),
                 "score": score,
                 "box": box,
             })

@@ -153,8 +153,12 @@ Current geometry bring-up:
 - `7cea7f7` fixes that script import path.
 - `19185139` is the replacement mini geometry job and was pending for `Priority`
   at the latest check.
+- `squeue --start -j 19185139` estimated start time:
+  `2026-05-03T04:03:32` on `gpu-a6-9`.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled; the active
   bring-up target is `19185139` on `gpu-h100`.
+- `19186443` was a later stray `gpu-a100` geometry submission, estimated for
+  `2026-05-02T21:00:00`, and was also canceled.
 
 ## Quota Note
 

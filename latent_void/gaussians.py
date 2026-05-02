@@ -5,7 +5,6 @@ GAUSSIAN_CHANNELS = [
     "rgb_r",
     "rgb_g",
     "rgb_b",
-    "depth",
     "scale_x",
     "scale_y",
     "scale_z",
@@ -14,6 +13,7 @@ GAUSSIAN_CHANNELS = [
     "quat_y",
     "quat_z",
     "opacity",
+    "depth",
 ]
 
 

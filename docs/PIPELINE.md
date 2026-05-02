@@ -6,7 +6,9 @@ The MVP is native 3D scene removal:
 
 1. Load a real multi-view Inpaint360GS scene with COLMAP camera metadata.
 2. Generate missing geometry channels: Marigold depth, Marigold normals, and
-   coordinate maps from depth plus COLMAP reprojection.
+   coordinate maps from depth plus COLMAP reprojection. The preprocessing stage
+   also normalizes COLMAP camera poses into a DiffSplat-like object-scale frame
+   before writing the manifest used by GSRecon.
 3. Run DiffSplat `GSRecon` to obtain structured Gaussian grids.
 4. Encode those grids into GSVAE splat latents.
 5. Render/load calibrated views.
@@ -31,6 +33,11 @@ Configured by `external.geometry_command`. It generates:
 - raw world coordinate maps from COLMAP reprojection
 - normalized coordinate maps for GSRecon
 - `geometry_manifest.json`
+
+The default Zaratan config keeps coordinate values in a scene min/max encoding
+and records the camera normalization transform in the manifest. A
+`geometry.coord_mode: diffsplat` option is available for the stricter
+`coord * 0.5 + 0.5` encoding used by the original GObjaverse path.
 
 ### GSRecon
 
@@ -63,6 +70,8 @@ The local wrapper supports `--backend auto`, `--backend transformers`, and
 `--backend repo`. Auto mode prefers the official Hugging Face Transformers SAM3
 API and falls back to the cloned `facebookresearch/sam3` repository path. This
 keeps Zaratan usable even if one backend has a Python/CUDA dependency mismatch.
+Masks are resized to the geometry input resolution in the Zaratan config so
+Gaussian projections and SAM masks share pixel coordinates during fusion.
 
 ### Latent Inpainting
 

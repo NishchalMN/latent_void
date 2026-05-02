@@ -25,6 +25,18 @@ checkpoints:
   sam3_weights: ${SAM3_WEIGHTS:-/path/to/sam3.pt}
   latent_inpaint_weights: ${LATENT_INPAINT_WEIGHTS:-}
 
+geometry:
+  input_res: 256
+  device: cuda
+  depth_model: prs-eth/marigold-depth-v1-1
+  normal_model: prs-eth/marigold-normals-v1-1
+  num_inference_steps: 4
+  ensemble_size: 1
+  depth_scale: 5.0
+  normalize_cameras: true
+  camera_norm_radius: 1.4
+  coord_mode: scene_minmax
+
 pipeline:
   max_views: 16
   mask_threshold: 0.55
@@ -48,6 +60,7 @@ external:
     --manifest {manifest_path}
     --prompt "{prompt}"
     --output-dir {mask_dir}
+    --resize-to {mask_resize}
   latent_inpaint_command: ""
   render_command: ""
 

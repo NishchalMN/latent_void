@@ -33,6 +33,9 @@ geometry:
   num_inference_steps: 4
   ensemble_size: 1
   depth_scale: 5.0
+  normalize_cameras: true
+  camera_norm_radius: 1.4
+  coord_mode: scene_minmax
 
 pipeline:
   max_views: 16
@@ -64,6 +67,7 @@ external:
     --manifest {manifest_path}
     --prompt "{prompt}"
     --output-dir {mask_dir}
+    --resize-to {mask_resize}
   latent_inpaint_command: ""
   render_command: ""
 

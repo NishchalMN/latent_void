@@ -124,9 +124,15 @@ def fuse_void(config):
         masks,
         threshold=float(get_nested(config, "pipeline.mask_threshold")),
     )
+    latent_shape = None
+    latent_path = _resolve_latent_npy(config)
+    if os.path.exists(latent_path):
+        latent_shape = np.load(latent_path, mmap_mode="r").shape
     latent_mask = latent_mask_from_gaussian_mask(
         deletion,
+        latent_shape=latent_shape,
         downsample=int(get_nested(config, "pipeline.latent_downsample")),
+        gaussian_grid_shape=arrays.get("gaussian_grid_shape"),
     )
     save_array(os.path.join(dirs["void"], "gaussian_deletion_mask.npy"), deletion.astype(np.uint8))
     save_array(os.path.join(dirs["void"], "gaussian_mask_scores.npy"), scores)
