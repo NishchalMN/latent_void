@@ -106,7 +106,11 @@ python scripts/check_sam3_access.py --download
 - DiffSplat scene exporter is implemented but not yet H100-tested with the full
   DiffSplat GPU dependency stack.
 - The heavy dependency setup that compiles DiffSplat's Gaussian rasterizer is
-  added but not yet validated on Zaratan.
+  added but not yet fully validated on Zaratan. First attempt installed torch,
+  SAM 3, DiffSplat requirements, Diffusers 0.35.2, and Transformers, then failed
+  while building `diff-gaussian-rasterization` because pip build isolation could
+  not import the installed `torch`. The setup script now uses
+  `--no-build-isolation` and sets `TORCH_CUDA_ARCH_LIST=9.0` for H100 builds.
 - The SAM 3 Transformers/repo backend auto-selection is implemented but not yet
   H100-tested on a real image.
 - Research-quality latent inpainting logic is not complete yet.
