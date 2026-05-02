@@ -4,9 +4,14 @@
 import argparse
 import json
 import os
+import sys
 
 import numpy as np
 from PIL import Image
+
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
 from latent_void.config import get_nested, load_config
 from latent_void.datasets import Inpaint360GSDataset
