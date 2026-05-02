@@ -13,7 +13,9 @@ Last updated: 2026-05-02
   `/home/gnanesh/scratch.msml612pcs3/latent_void`
 - Branch:
   `main`
-- Latest pushed code commit before this documentation update:
+- Latest pushed repo commit before this status update:
+  `bdd8535 Document mask grid alignment runbook`
+- Latest pushed code commit:
   `02218cd Align geometry and mask shapes for GSRecon`
 
 Implemented and verified locally:
@@ -137,6 +139,18 @@ python scripts/check_sam3_access.py --download
 INSTALL_GPU_DEPS=1 DOWNLOAD_DIFFSPLAT_CKPTS=0 MAX_JOBS=4 scripts/setup_zaratan_deps.sh
 ```
 
+Latest Zaratan post-pull validation:
+
+```bash
+git pull --ff-only
+python -m unittest discover -s tests
+python -m py_compile tools/preprocess_geometry.py tools/run_sam3_multiview.py tools/run_gsrecon_export.py latent_void/latent.py latent_void/pipeline.py latent_void/masks.py latent_void/gaussians.py
+python -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_bag_postpull_dry --dry-run
+```
+
+Result: 17 tests passed; post-pull dry-run rendered geometry, GSRecon, and SAM
+3 commands correctly, including `--resize-to 256` for SAM masks.
+
 ## What Fails Or Is Not Ready
 
 - First real H100 geometry job was submitted and ran:
@@ -166,6 +180,9 @@ INSTALL_GPU_DEPS=1 DOWNLOAD_DIFFSPLAT_CKPTS=0 MAX_JOBS=4 scripts/setup_zaratan_d
   - job id: `19186443`
   - estimated start before cancellation: `2026-05-02T21:00:00`
   - final state at latest check: canceled / no longer in `squeue`
+- `sbatch --test-only --partition=gpu --gres=gpu:h100:1` estimated a later
+  start (`2026-05-03T23:53:18`) than the active `gpu-h100` job, so do not
+  replace `19185139` with the generic `gpu` partition.
 - Zaratan file-count quota issue encountered and resolved for this working
   copy:
   - project group `zt-msml612pcs3` hit BeegFS file-count hard quota
@@ -251,8 +268,8 @@ tail -120 logs/latent-void-geom-19185139.out
 tail -120 logs/latent-void-geom-19185139.err
 ```
 
-Before it starts, make sure Zaratan has pulled the latest GitHub commit so the
-queued Slurm job uses the mask/grid-alignment fixes.
+Zaratan has already pulled the latest GitHub commit and passed post-pull tests,
+so the queued Slurm job should use the mask/grid-alignment fixes.
 
 After geometry succeeds, continue with:
 

@@ -165,6 +165,11 @@ Current geometry bring-up:
   bring-up target is `19185139` on `gpu-h100`.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.
+- A non-submitting `sbatch --test-only --partition=gpu --gres=gpu:h100:1`
+  check estimated `2026-05-03T23:53:18`, which is later than the active
+  `gpu-h100` job. Keep `19185139`.
+- Zaratan has pulled `bdd8535`; post-pull unit tests, py_compile, and
+  `configs/zaratan_inpaint360gs_bag.yaml` dry-run passed.
 - Zaratan must pull the current GitHub commit before `19185139` starts so the
   queued job sees the Marigold depth squeeze plus SAM/latent mask grid fixes.
 
