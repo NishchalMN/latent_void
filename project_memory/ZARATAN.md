@@ -153,6 +153,23 @@ Current geometry bring-up:
 - `7cea7f7` fixes that script import path.
 - `19185139` is the replacement mini geometry job and was pending for `Priority`
   at the latest check.
+- `19185424` was a backup `gpu-a100` geometry job and was canceled; the active
+  bring-up target is `19185139` on `gpu-h100`.
+
+## Quota Note
+
+The original working-copy group `zt-msml612pcs3` hit BeegFS file-count quota and
+blocked writes, including Git object creation. Python caches were deleted, then
+the repo tree was moved to group `zt-msml605`:
+
+```bash
+chgrp -R zt-msml605 .
+find . -type d -exec chmod g-s {} +
+```
+
+After that, `.git/write_test` and `git pull --ff-only` succeeded. Keep new
+artifacts under this working copy group unless the project-group quota is
+explicitly repaired.
 
 ## Real Job Command
 

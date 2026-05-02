@@ -82,6 +82,23 @@ Default Slurm settings:
 - real inpaint partition: `gpu-h100`
 - real inpaint GRES: `gpu:h100:1`
 
+## Quota And Group Notes
+
+The working copy was moved to group `zt-msml605` after `zt-msml612pcs3` hit its
+BeegFS file-count hard quota and blocked Git writes. If writes start failing
+with `Disk quota exceeded`, check both group quotas:
+
+```bash
+beegfs-ctl --getquota --gid 102781
+beegfs-ctl --getquota --gid 102518
+```
+
+The active repo tree should show group `zt-msml605`:
+
+```bash
+ls -ld . .git runs logs .venvs data checkpoints
+```
+
 ## Known External Requirements
 
 - SAM 3 checkpoint download requires Hugging Face authentication and access to

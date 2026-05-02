@@ -14,7 +14,7 @@ Last updated: 2026-05-02
 - Branch:
   `main`
 - Latest pushed commit before this memory update:
-  `7cea7f7 Allow geometry tool imports under Slurm`
+  `da7d56f Record Zaratan geometry queue state`
 
 Implemented and verified locally:
 
@@ -124,12 +124,24 @@ INSTALL_GPU_DEPS=1 DOWNLOAD_DIFFSPLAT_CKPTS=0 MAX_JOBS=4 scripts/setup_zaratan_d
   - partition: `gpu-h100`
   - state at latest check: `PENDING`
   - reason: `Priority`
-- Backup A100 geometry job is also queued with a separate output directory:
+- Backup A100 geometry job was briefly submitted with a separate output directory
+  and then canceled so the bring-up stays focused on H100:
   - job id: `19185424`
   - partition: `gpu-a100`
   - output: `runs/inpaint360gs_bag_mini_a100`
-  - state at latest check: `PENDING`
-  - reason: `Priority`
+  - final state at latest check: canceled / no longer in `squeue`
+- Zaratan file-count quota issue encountered and resolved for this working
+  copy:
+  - project group `zt-msml612pcs3` hit BeegFS file-count hard quota
+    (`527979 / 450000` after cache cleanup), causing even `.git/write_test` and
+    `git pull --ff-only` to fail with `Disk quota exceeded`.
+  - removed Python caches and pip cache, which reduced this project by roughly
+    17k files but did not fully solve the group-level quota.
+  - changed the working-copy group to `zt-msml605`, which has headroom
+    (`1435440 / 4500000` files at the check).
+  - after the group change, write tests and `git pull --ff-only` succeeded.
+  - `zt-msml612pcs3` returned below quota (`337797 / 450000` files at the
+    check).
 - Slurm smoke job was submitted twice and canceled while pending:
   - first used the old `gpu-h100` smoke template and was pending for priority.
   - second used the new `debug` CPU template and was pending for resources.
@@ -193,14 +205,12 @@ Generated local dry-run artifacts are ignored by Git under `runs/`.
 
 ## Next Best Step
 
-Wait for either queued geometry job:
+Wait for the queued H100 geometry job:
 
 ```bash
-squeue -j 19185139,19185424 -o '%.18i %.9P %.30j %.8T %.10M %.10l %.30R'
+squeue -j 19185139 -o '%.18i %.9P %.30j %.8T %.10M %.10l %.30R'
 tail -120 logs/latent-void-geom-19185139.out
 tail -120 logs/latent-void-geom-19185139.err
-tail -120 logs/latent-void-geom-19185424.out
-tail -120 logs/latent-void-geom-19185424.err
 ```
 
 After geometry succeeds, continue with:
