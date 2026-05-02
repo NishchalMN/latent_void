@@ -26,6 +26,8 @@ Implemented and verified locally:
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
 - Slurm templates for smoke and inpainting jobs.
+- Smoke Slurm template uses the short CPU `debug` partition; real inpainting
+  still uses `gpu-h100`.
 - Zaratan runbook and pipeline docs.
 - Official external repos cloned on Zaratan under `external/`:
   - DiffSplat

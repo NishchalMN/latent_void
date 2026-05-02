@@ -34,7 +34,8 @@ sbatch slurm/zaratan_smoke.sbatch configs/zaratan_inpaint360gs_bag.yaml
 ```
 
 The smoke job only validates config, dataset discovery, and dry-run command
-rendering. It should not spend meaningful GPU time.
+rendering. It runs on the short CPU `debug` partition and should not spend GPU
+time.
 
 `scripts/setup_zaratan_deps.sh` clones/updates DiffSplat, SAM 3, and
 Inpaint360GS. It also downloads DiffSplat's PixArt-Sigma checkpoint bundle when
@@ -60,8 +61,9 @@ sbatch slurm/zaratan_inpaint.sbatch configs/my_scene.yaml
 Default Slurm settings:
 
 - account: `msml612pcs3-class`
-- partition: `gpu-h100`
-- GRES: `gpu:h100:1`
+- smoke partition: `debug`
+- real inpaint partition: `gpu-h100`
+- real inpaint GRES: `gpu:h100:1`
 
 ## Known External Requirements
 

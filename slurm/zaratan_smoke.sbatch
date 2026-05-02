@@ -1,11 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=latent-void-smoke
 #SBATCH --account=msml612pcs3-class
-#SBATCH --partition=gpu-h100
-#SBATCH --gres=gpu:h100:1
-#SBATCH --time=00:30:00
+#SBATCH --partition=debug
+#SBATCH --time=00:15:00
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
+#SBATCH --mem=8G
 #SBATCH --output=logs/%x-%j.out
 #SBATCH --error=logs/%x-%j.err
 
