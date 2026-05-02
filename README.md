@@ -76,3 +76,12 @@ If SSH keys are unavailable on Zaratan, use the HTTPS remote there:
 ```bash
 git remote set-url origin https://github.com/NishchalMN/latent_void.git
 ```
+
+## Project Memory
+
+Important context, decisions, current status, failures, and next steps live in
+`project_memory/`. Start there after any context reset:
+
+```bash
+ls project_memory
+```

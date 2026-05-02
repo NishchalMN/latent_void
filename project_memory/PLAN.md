@@ -1,0 +1,72 @@
+# Active Plan
+
+Last updated: 2026-05-02
+
+## Milestone 1: Real-Scene Native Latent Removal MVP
+
+Target: one Inpaint360GS scene with one prompted object removed, inpainted
+through GSVAE/DiffSplat latent space, and rendered as before/after diagnostics.
+
+Implementation stages:
+
+1. Configure a real Inpaint360GS scene on Zaratan.
+2. Configure installed DiffSplat/GSRecon paths and pretrained weights.
+3. Configure installed SAM 3 paths and pretrained weights.
+4. Run GSRecon to create Gaussian grids, projected Gaussian metadata, and latent
+   tensors.
+5. Run SAM 3 over calibrated scene views with object prompt and optional shadow
+   prompt.
+6. Fuse SAM masks into a Gaussian deletion mask using projected `uvs` and
+   `visibility`.
+7. Create a latent void mask using the configured downsample strategy.
+8. Run latent inpainting through a configured pretrained or optimization
+   backend.
+9. Decode or merge the result back into a renderable Gaussian scene.
+10. Render before/after views, masks, depth diagnostics, and a turntable video.
+
+## Milestone 2: Artifact Reduction
+
+Target: reduce holes, floaters, shadow leftovers, and view-inconsistent seams.
+
+Planned additions:
+
+- Depth-aware cleanup around void boundaries.
+- Opacity and visibility filtering for floaters.
+- Shadow prompt path and offset/association logging.
+- Diagnostics for per-view mask disagreement.
+- Better latent mask dilation/erosion controls.
+
+## Milestone 3: Self-Supervised Fine-Tuning
+
+Target: improve native latent inpainting quality when pretrained components are
+insufficient.
+
+Planned additions:
+
+- DL3DV-10K or compatible scene dataset loader.
+- Random 3D/object-like mask generator.
+- Training config and Slurm template.
+- Losses for masked latent reconstruction, render consistency, depth,
+  silhouette/opacity, and artifact cleanup.
+- Checkpoint/resume/evaluation workflow.
+
+## Current Code Interfaces
+
+- `latent_void.datasets.Inpaint360GSDataset`: scene discovery and view manifest.
+- `latent_void.external`: command adapter utilities.
+- `latent_void.masks.Sam3CommandAdapter`: SAM 3 command wrapper.
+- `latent_void.masks.fuse_gaussian_masks`: multi-view mask fusion.
+- `latent_void.latent.latent_mask_from_gaussian_mask`: latent void mask creation.
+- `latent_void.pipeline`: stage orchestration.
+- `python3 -m latent_void`: CLI entrypoint.
+
+## Acceptance Criteria For MVP
+
+- A real Inpaint360GS scene is loaded from config.
+- GSRecon writes the expected Gaussian/latent artifacts.
+- SAM 3 writes masks for the target prompt.
+- The fuse stage produces `gaussian_deletion_mask.npy` and
+  `latent_void_mask.npy`.
+- Inpainting writes an edited latent or Gaussian artifact.
+- Final outputs include before/after visual renders.
+- Unmasked scene regions remain visually stable.
