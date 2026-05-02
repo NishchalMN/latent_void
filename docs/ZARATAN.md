@@ -55,11 +55,14 @@ Use the staged jobs while bringing up the real pipeline:
 sbatch slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
 sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/inpaint360gs_bag_mini
 sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+sbatch slurm/zaratan_render.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
 ```
 
 The first command runs the zero-training Marigold geometry preprocessing. The
 second consumes `geometry_manifest.json` and runs DiffSplat GSRecon/GSVAE. The
-third runs SAM 3 masks for the configured prompt.
+third runs SAM 3 masks for the configured prompt. The render stage decodes the
+original and inpainted GSVAE latents into before/after diagnostic views after
+`fuse` and `inpaint` have produced the void mask and `latent_inpainted.npy`.
 
 If an A100 smoke is useful while an H100 job is pending, override both the
 partition and the GPU type; overriding only the partition leaves the H100 GRES

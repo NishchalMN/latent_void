@@ -189,6 +189,25 @@ def run_latent_inpaint(config, dry_run=False):
     return result
 
 
+def run_render(config, dry_run=False):
+    dirs = run_dirs(config)
+    command = get_nested(config, "external.render_command", "")
+    if not command:
+        return {"skipped": True, "reason": "external.render_command is empty"}
+    values = {
+        "config_path": config.get("_config_path", ""),
+        "diffsplat_root": get_nested(config, "checkpoints.diffsplat_root"),
+        "gsvae_weights": get_nested(config, "checkpoints.gsvae_weights"),
+        "gaussian_npz": _resolve_gaussian_npz(config),
+        "latent_path": _resolve_latent_npy(config),
+        "inpainted_latent_path": os.path.join(dirs["inpaint"], "latent_inpainted.npy"),
+        "render_dir": dirs["renders"],
+    }
+    result = run_command(command, values, dry_run=dry_run)
+    write_json(os.path.join(dirs["renders"], "render_command.json"), result)
+    return result
+
+
 def run_pipeline(config, dry_run=False, skip_geometry=False, skip_reconstruct=False, skip_segment=False):
     validate(config)
     results = {"dataset": discover_dataset(config)}
@@ -200,8 +219,16 @@ def run_pipeline(config, dry_run=False, skip_geometry=False, skip_reconstruct=Fa
         results["reconstruct"] = run_gsrecon(config, dry_run=dry_run)
     if not skip_segment:
         results["segment"] = run_segmentation(config, dry_run=dry_run)
-    if not dry_run:
+    if dry_run:
+        results["inpaint"] = run_latent_inpaint(config, dry_run=True)
+        render_result = run_render(config, dry_run=True)
+        if not render_result.get("skipped"):
+            results["render"] = render_result
+    else:
         results["fuse"] = fuse_void(config)
         results["inpaint"] = run_latent_inpaint(config, dry_run=False)
+        render_result = run_render(config, dry_run=False)
+        if not render_result.get("skipped"):
+            results["render"] = render_result
     write_json(os.path.join(run_dirs(config)["root"], "run_manifest.json"), results)
     return results

@@ -165,6 +165,10 @@ def _run_model(args, manifest):
         gaussian_grid_shape=np.asarray([batch_size, num_input_views, height, width], dtype=np.int32),
         latent_shape=np.asarray(latent_np.shape, dtype=np.int32),
         gs_grid_shape=np.asarray(gs_grid_np.shape, dtype=np.int32),
+        input_C2W=tensors["input_C2W"].detach().cpu().numpy().astype(np.float32),
+        input_fxfycxcy=tensors["input_fxfycxcy"].detach().cpu().numpy().astype(np.float32),
+        all_C2W=tensors["all_C2W_np"].astype(np.float32),
+        all_fxfycxcy=tensors["all_fxfycxcy_np"].astype(np.float32),
         input_view_ids=np.asarray(tensors["input_view_ids"]),
         all_view_ids=np.asarray(tensors["all_view_ids"]),
     )

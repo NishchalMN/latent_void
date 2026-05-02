@@ -53,6 +53,9 @@ def build_parser():
     inpaint = add_common("inpaint")
     inpaint.add_argument("--dry-run", action="store_true")
 
+    render = add_common("render")
+    render.add_argument("--dry-run", action="store_true")
+
     run = add_common("run")
     run.add_argument("--dry-run", action="store_true")
     run.add_argument("--skip-geometry", action="store_true")
@@ -86,6 +89,9 @@ def main(argv=None):
             result = fuse_void(config)
         elif args.command == "inpaint":
             result = run_latent_inpaint(config, dry_run=args.dry_run)
+        elif args.command == "render":
+            from latent_void.pipeline import run_render
+            result = run_render(config, dry_run=args.dry_run)
         elif args.command == "run":
             result = run_pipeline(
                 config,

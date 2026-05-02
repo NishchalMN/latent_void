@@ -88,11 +88,20 @@ Configured by `external.latent_inpaint_command`. If omitted and
 cells with unmasked channel means. That fallback is for plumbing tests only, not
 the final research-quality model.
 
+### Render Diagnostics
+
+Configured by `external.render_command`. The local `tools/render_latent_scene.py`
+adapter decodes scaled GSVAE splat latents back to 12-channel Gaussian grids and
+renders RGB, alpha, and depth diagnostics through DiffSplat's renderer. It can
+render both the original `latent.npy` and the inpainted
+`latent_inpainted.npy`, producing `before/` and `after/` directories under the
+run's render folder.
+
 ## Zaratan
 
 Use the `debug` partition for dry-run smoke checks and `gpu-h100` with
 `msml612pcs3-class` for heavy model stages. The Slurm templates are thin wrappers
 around `python3 -m latent_void` so the same configs can run locally and remotely.
 For first H100 validation, run the staged `zaratan_geometry`, `zaratan_reconstruct`,
-and `zaratan_segment` jobs with `--set project.output_dir=...` pointing at the
-same mini run directory.
+`zaratan_segment`, and `zaratan_render` jobs with `--set project.output_dir=...`
+pointing at the same mini run directory.

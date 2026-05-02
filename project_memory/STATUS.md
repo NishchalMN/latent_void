@@ -48,8 +48,11 @@ Implemented and verified locally:
 - Latent void masks now use GSRecon's `[B, V, H, W]` Gaussian grid shape and
   the actual `latent.npy` shape instead of flattening all Gaussians into an
   arbitrary square grid.
+- Render diagnostics are now wired through `tools/render_latent_scene.py`,
+  which decodes scaled GSVAE latents and renders before/after RGB, alpha, and
+  depth outputs with DiffSplat's renderer.
 - Staged H100 Slurm scripts exist for geometry, GSRecon/GSVAE reconstruction,
-  and SAM 3 segmentation.
+  SAM 3 segmentation, and latent render diagnostics.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
@@ -119,6 +122,7 @@ Latest local validation after the mask/grid fixes:
 python3 -m py_compile tools/preprocess_geometry.py tools/run_sam3_multiview.py tools/run_gsrecon_export.py latent_void/latent.py latent_void/pipeline.py latent_void/masks.py latent_void/gaussians.py
 python3 -m unittest discover -s tests
 python3 -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_dry_after_mask_fixes --set pipeline.max_views=4 --dry-run
+python3 -m latent_void render --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_render_dry --dry-run
 ```
 
 The local smoke environment lacks Pillow, so the two Pillow-dependent unit
@@ -276,6 +280,7 @@ After geometry succeeds, continue with:
 ```bash
 sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/inpaint360gs_bag_mini
 sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
+sbatch slurm/zaratan_render.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
 ```
 
 Remaining model-adapter blocker:

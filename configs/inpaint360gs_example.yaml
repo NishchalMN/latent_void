@@ -62,7 +62,14 @@ external:
     --output-dir {mask_dir}
     --resize-to {mask_resize}
   latent_inpaint_command: ""
-  render_command: ""
+  render_command: >-
+    python tools/render_latent_scene.py
+    --diffsplat-root {diffsplat_root}
+    --gsvae-weights {gsvae_weights}
+    --gaussian-npz {gaussian_npz}
+    --latent-path {latent_path}
+    --compare-latent-path {inpainted_latent_path}
+    --output-dir {render_dir}
 
 hpc:
   account: msml612pcs3-class
