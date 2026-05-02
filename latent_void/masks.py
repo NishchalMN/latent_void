@@ -1,7 +1,5 @@
 import os
 
-import numpy as np
-
 from latent_void.config import get_nested
 from latent_void.external import run_command, write_views_manifest
 from latent_void.io import ensure_dir, expand_brace_glob, load_mask, write_json
@@ -38,6 +36,8 @@ class Sam3CommandAdapter(object):
 
 
 def mask_center(mask):
+    import numpy as np
+
     coords = np.argwhere(mask.astype(bool))
     if coords.size == 0:
         return None
@@ -46,6 +46,8 @@ def mask_center(mask):
 
 
 def shadow_offset(object_mask, shadow_mask):
+    import numpy as np
+
     object_center = mask_center(object_mask)
     shadow_center = mask_center(shadow_mask)
     if object_center is None or shadow_center is None:
@@ -71,6 +73,8 @@ def sample_mask(mask, uv):
 
 
 def fuse_gaussian_masks(uvs, visibility, masks, threshold=0.55):
+    import numpy as np
+
     """Fuse per-view 2D masks into a Gaussian deletion mask.
 
     Args:

@@ -2,8 +2,6 @@ import glob
 import json
 import os
 
-import numpy as np
-
 
 def ensure_dir(path):
     if path:
@@ -36,6 +34,8 @@ def expand_brace_glob(pattern):
 
 
 def load_mask(path):
+    import numpy as np
+
     lower = path.lower()
     if lower.endswith(".npy"):
         mask = np.load(path)
@@ -51,6 +51,8 @@ def load_mask(path):
 
 
 def save_mask(path, mask):
+    import numpy as np
+
     ensure_dir(os.path.dirname(path))
     if path.lower().endswith(".npy"):
         np.save(path, mask.astype(np.uint8))
@@ -63,9 +65,13 @@ def save_mask(path, mask):
 
 
 def save_array(path, array):
+    import numpy as np
+
     ensure_dir(os.path.dirname(path))
     np.save(path, array)
 
 
 def load_array(path):
+    import numpy as np
+
     return np.load(path)

@@ -1,14 +1,9 @@
 import os
 
-import numpy as np
-
 from latent_void.config import get_nested, validate_config
 from latent_void.datasets import Inpaint360GSDataset
 from latent_void.external import run_command
-from latent_void.gaussians import delete_gaussians, load_gaussian_npz, require_projection_arrays, save_gaussian_npz
-from latent_void.io import ensure_dir, load_array, save_array, write_json
-from latent_void.latent import fallback_inpaint_latent, latent_mask_from_gaussian_mask
-from latent_void.masks import Sam3CommandAdapter, fuse_gaussian_masks, load_masks_from_dir
+from latent_void.io import ensure_dir, write_json
 
 
 def run_dirs(config):
@@ -60,6 +55,8 @@ def run_gsrecon(config, dry_run=False):
 
 
 def run_segmentation(config, dry_run=False):
+    from latent_void.masks import Sam3CommandAdapter
+
     dirs = run_dirs(config)
     dataset = dataset_from_config(config)
     views = dataset.views(max_views=get_nested(config, "pipeline.max_views"))
@@ -83,6 +80,13 @@ def _resolve_latent_npy(config):
 
 
 def fuse_void(config):
+    import numpy as np
+
+    from latent_void.gaussians import delete_gaussians, load_gaussian_npz, require_projection_arrays, save_gaussian_npz
+    from latent_void.io import save_array
+    from latent_void.latent import latent_mask_from_gaussian_mask
+    from latent_void.masks import fuse_gaussian_masks, load_masks_from_dir
+
     dirs = run_dirs(config)
     gaussian_npz = _resolve_gaussian_npz(config)
     arrays = load_gaussian_npz(gaussian_npz)
@@ -121,6 +125,9 @@ def fuse_void(config):
 
 
 def run_latent_inpaint(config, dry_run=False):
+    from latent_void.io import load_array, save_array
+    from latent_void.latent import fallback_inpaint_latent
+
     dirs = run_dirs(config)
     command = get_nested(config, "external.latent_inpaint_command", "")
     latent_path = _resolve_latent_npy(config)
