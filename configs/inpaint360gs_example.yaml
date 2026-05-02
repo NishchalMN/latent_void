@@ -1,0 +1,59 @@
+project:
+  name: latent_void_inpaint360gs
+  output_dir: ${LATENT_VOID_OUTPUT_DIR:-runs/inpaint360gs_demo}
+  device: cuda
+  seed: 1234
+
+dataset:
+  type: inpaint360gs
+  root: ${INPAINT360GS_ROOT:-/path/to/Inpaint360GS}
+  scene: ${INPAINT360GS_SCENE:-garden}
+  images_glob: images/*.{png,jpg,jpeg}
+  masks_glob: masks/*.{npy,png,jpg,jpeg}
+  cameras_path: cameras.json
+
+prompts:
+  object: ${LATENT_VOID_OBJECT_PROMPT:-chair}
+  shadow: ${LATENT_VOID_SHADOW_PROMPT:-}
+  include_shadow: false
+
+checkpoints:
+  diffsplat_root: ${DIFFSPLAT_ROOT:-/path/to/DiffSplat}
+  gsrecon_weights: ${GSRECON_WEIGHTS:-/path/to/gsrecon.ckpt}
+  gsvae_weights: ${GSVAE_WEIGHTS:-/path/to/gsvae.ckpt}
+  sam3_root: ${SAM3_ROOT:-/path/to/sam3}
+  sam3_weights: ${SAM3_WEIGHTS:-/path/to/sam3.pt}
+  latent_inpaint_weights: ${LATENT_INPAINT_WEIGHTS:-}
+
+pipeline:
+  max_views: 16
+  mask_threshold: 0.55
+  latent_downsample: 8
+  gaussian_npz: ${GAUSSIAN_NPZ:-}
+  latent_npy: ${LATENT_NPY:-}
+  mask_source: auto
+  allow_fallback_inpaint: true
+
+external:
+  gsrecon_command: >-
+    python {diffsplat_root}/tools/run_gsrecon.py
+    --weights {gsrecon_weights}
+    --dataset-root {dataset_root}
+    --scene {scene_id}
+    --output-dir {gsrecon_dir}
+  sam3_command: >-
+    python {sam3_root}/tools/run_sam3_multiview.py
+    --weights {sam3_weights}
+    --manifest {manifest_path}
+    --prompt "{prompt}"
+    --output-dir {mask_dir}
+  latent_inpaint_command: ""
+  render_command: ""
+
+hpc:
+  account: msml612pcs3-class
+  partition: gpu-h100
+  gres: gpu:h100:1
+  time: "02:00:00"
+  cpus_per_task: 8
+  mem: 64G

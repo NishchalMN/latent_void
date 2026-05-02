@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=45"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "latent-void"
+version = "0.1.0"
+description = "Native latent 3D object removal scaffold for real multi-view scenes"
+requires-python = ">=3.6"
+dependencies = [
+  "numpy",
+  "PyYAML",
+]
+
+[tool.setuptools]
+packages = ["latent_void"]
