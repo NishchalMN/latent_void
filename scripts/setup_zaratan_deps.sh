@@ -44,7 +44,7 @@ fi
 
 unset PYTHONPATH
 source "${VENV}/bin/activate"
-python -m pip install --upgrade wheel setuptools
+python -m pip install --upgrade wheel "setuptools<82"
 python -m pip install \
   "numpy>=1.26,<2" PyYAML gdown huggingface_hub pillow tqdm \
   requests "requests[socks]" idna certifi charset-normalizer urllib3 beautifulsoup4

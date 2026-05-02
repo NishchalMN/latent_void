@@ -113,7 +113,8 @@ python scripts/check_sam3_access.py --download
   `--no-build-isolation`, loads `cuda/12.3.0/gcc/11.3.0/zen2`, and sets
   `TORCH_CUDA_ARCH_LIST=9.0` for H100 builds. A manual compile succeeded after
   setting `CUDA_HOME` from `nvcc`; setup now overwrites stale `CUDA_HOME` values
-  when `nvcc` is visible.
+  when `nvcc` is visible. Setup also keeps `setuptools<82` because Torch 2.11
+  declares that upper bound.
 - The SAM 3 Transformers/repo backend auto-selection is implemented but not yet
   H100-tested on a real image.
 - Research-quality latent inpainting logic is not complete yet.
