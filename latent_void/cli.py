@@ -6,6 +6,7 @@ from latent_void.config import ConfigError, load_config, validate_config, with_o
 from latent_void.pipeline import (
     discover_dataset,
     fuse_void,
+    prepare_geometry,
     run_gsrecon,
     run_latent_inpaint,
     run_pipeline,
@@ -38,6 +39,9 @@ def build_parser():
 
     add_common("discover-dataset")
 
+    geometry = add_common("prepare-geometry")
+    geometry.add_argument("--dry-run", action="store_true")
+
     reconstruct = add_common("reconstruct")
     reconstruct.add_argument("--dry-run", action="store_true")
 
@@ -51,6 +55,7 @@ def build_parser():
 
     run = add_common("run")
     run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--skip-geometry", action="store_true")
     run.add_argument("--skip-reconstruct", action="store_true")
     run.add_argument("--skip-segment", action="store_true")
 
@@ -71,6 +76,8 @@ def main(argv=None):
             result = validate(config, strict_paths=args.strict_paths)
         elif args.command == "discover-dataset":
             result = discover_dataset(config)
+        elif args.command == "prepare-geometry":
+            result = prepare_geometry(config, dry_run=args.dry_run)
         elif args.command == "reconstruct":
             result = run_gsrecon(config, dry_run=args.dry_run)
         elif args.command == "segment":
@@ -83,6 +90,7 @@ def main(argv=None):
             result = run_pipeline(
                 config,
                 dry_run=args.dry_run,
+                skip_geometry=args.skip_geometry,
                 skip_reconstruct=args.skip_reconstruct,
                 skip_segment=args.skip_segment,
             )

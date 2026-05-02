@@ -19,6 +19,7 @@ from PIL import Image
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sam3-root", required=True)
+    parser.add_argument("--checkpoint-path", default="")
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--prompt", required=True)
     parser.add_argument("--output-dir", required=True)
@@ -27,13 +28,17 @@ def parse_args():
     return parser.parse_args()
 
 
-def _load_sam3(sam3_root, device, confidence_threshold):
+def _load_sam3(sam3_root, device, confidence_threshold, checkpoint_path=""):
     sys.path.insert(0, sam3_root)
     import torch
     from sam3.model_builder import build_sam3_image_model
     from sam3.model.sam3_image_processor import Sam3Processor
 
-    model = build_sam3_image_model(device=device)
+    model = build_sam3_image_model(
+        device=device,
+        checkpoint_path=checkpoint_path or None,
+        load_from_HF=not bool(checkpoint_path),
+    )
     model.eval()
     return torch, Sam3Processor(model, device=device, confidence_threshold=confidence_threshold)
 
@@ -73,7 +78,7 @@ def main():
     with open(args.manifest, "r") as handle:
         manifest = json.load(handle)
 
-    torch, processor = _load_sam3(args.sam3_root, args.device, args.score_threshold)
+    torch, processor = _load_sam3(args.sam3_root, args.device, args.score_threshold, args.checkpoint_path)
     results = []
     with torch.inference_mode():
         for idx, view in enumerate(manifest.get("views", [])):

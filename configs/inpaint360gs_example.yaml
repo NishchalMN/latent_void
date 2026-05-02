@@ -35,6 +35,7 @@ pipeline:
   allow_fallback_inpaint: true
 
 external:
+  geometry_command: ""
   gsrecon_command: >-
     python {diffsplat_root}/tools/run_gsrecon.py
     --weights {gsrecon_weights}

@@ -22,8 +22,17 @@ checkpoints:
   gsrecon_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat/gsrecon_gobj265k_cnp_even4
   gsvae_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat/gsvae_gobj265k_sdxl_fp16
   sam3_root: /home/gnanesh/scratch.msml612pcs3/latent_void/external/sam3
-  sam3_weights: ""
+  sam3_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/sam3/sam3.pt
   latent_inpaint_weights: ""
+
+geometry:
+  input_res: 256
+  device: cuda
+  depth_model: prs-eth/marigold-depth-v1-1
+  normal_model: prs-eth/marigold-normals-v1-1
+  num_inference_steps: 4
+  ensemble_size: 1
+  depth_scale: 5.0
 
 pipeline:
   max_views: 16
@@ -35,16 +44,23 @@ pipeline:
   allow_fallback_inpaint: true
 
 external:
+  geometry_command: >-
+    python tools/preprocess_geometry.py
+    --config {config_path}
+    --output-dir {geometry_dir}
   gsrecon_command: >-
     python tools/run_gsrecon_export.py
     --diffsplat-root {diffsplat_root}
     --weights {gsrecon_weights}
+    --gsvae-weights {gsvae_weights}
     --dataset-root {dataset_root}
     --scene {scene_id}
+    --geometry-manifest {geometry_manifest}
     --output-dir {gsrecon_dir}
   sam3_command: >-
     python tools/run_sam3_multiview.py
     --sam3-root {sam3_root}
+    --checkpoint-path {sam3_weights}
     --manifest {manifest_path}
     --prompt "{prompt}"
     --output-dir {mask_dir}

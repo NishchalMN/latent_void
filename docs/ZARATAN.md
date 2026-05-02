@@ -30,6 +30,8 @@ cd /home/gnanesh/scratch.msml612pcs3/latent_void
 scripts/setup_zaratan_deps.sh
 scripts/download_inpaint360gs.sh
 python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml
+python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
+python -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --dry-run
 sbatch slurm/zaratan_smoke.sbatch configs/zaratan_inpaint360gs_bag.yaml
 ```
 
@@ -75,13 +77,19 @@ Default Slurm settings:
   ```bash
   unset PYTHONPATH
   source .venvs/latent_void_py310/bin/activate
-  python scripts/check_sam3_access.py
+  python scripts/check_sam3_access.py --download
   ```
 
 - DiffSplat does not currently provide a simple GSRecon export CLI in the
-  upstream repo. `tools/run_gsrecon_export.py` records the expected contract and
-  fails loudly until the exporter is implemented against the installed
-  checkpoints.
+  upstream repo. `tools/run_gsrecon_export.py` is the local adapter and consumes
+  `geometry_manifest.json`, then exports `gaussians.npz`, `gs_grid.npy`, and
+  `latent.npy`.
 - Inpaint360GS scenes carry COLMAP camera metadata under `sparse/0`; the local
   loader reads both COLMAP text and binary camera/image files into the run
   manifest.
+- The zero-training geometry path uses Marigold depth and normals before
+  DiffSplat GSRecon. Install heavy dependencies with:
+
+  ```bash
+  INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
+  ```

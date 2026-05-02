@@ -5,19 +5,32 @@
 The MVP is native 3D scene removal:
 
 1. Load a real multi-view Inpaint360GS scene with COLMAP camera metadata.
-2. Run DiffSplat `GSRecon` to obtain structured Gaussian grids.
-3. Encode those grids into GSVAE splat latents.
-4. Render/load calibrated views.
-5. Segment prompted objects using SAM 3 from multiple views.
-6. Fuse masks into a Gaussian deletion mask and latent void mask.
-7. Inpaint only the latent void.
-8. Decode to Gaussians and render before/after diagnostics.
+2. Generate missing geometry channels: Marigold depth, Marigold normals, and
+   coordinate maps from depth plus COLMAP reprojection.
+3. Run DiffSplat `GSRecon` to obtain structured Gaussian grids.
+4. Encode those grids into GSVAE splat latents.
+5. Render/load calibrated views.
+6. Segment prompted objects using SAM 3 from multiple views.
+7. Fuse masks into a Gaussian deletion mask and latent void mask.
+8. Inpaint only the latent void.
+9. Decode to Gaussians and render before/after diagnostics.
 
 The code here does not vendor DiffSplat, SAM 3, or large checkpoints. It exposes
 command adapters with explicit manifests and output contracts so Zaratan jobs
 can call the installed model repositories.
 
 ## External Command Contracts
+
+### Geometry Preprocessing
+
+Configured by `external.geometry_command`. It generates:
+
+- resized RGB tensors in `[0, 1]`
+- Marigold depth maps
+- Marigold surface normals converted to `[0, 1]`
+- raw world coordinate maps from COLMAP reprojection
+- normalized coordinate maps for GSRecon
+- `geometry_manifest.json`
 
 ### GSRecon
 
@@ -29,13 +42,13 @@ Expected useful outputs:
 - `gaussians.npz`: Gaussian arrays. Minimum for mask fusion is either
   `positions` with camera metadata or precomputed `uvs` and `visibility`.
 - `latent.npy`: optional GSVAE latent tensor.
+- `gs_grid.npy`: optional 12-channel Gaussian grid.
 - rendered RGB/depth/alpha views for SAM 3 and diagnostics.
 
 Current caveat: upstream DiffSplat documents GSRecon inference through issue
-discussion rather than a packaged CLI, and its public checkpoint is trained for
-GObjaverse-style four-view object inputs with RGB plus camera-derived geometry
-channels. Real Inpaint360GS RGB scenes therefore need an explicit adapter for
-normal/coordinate inputs or a retrained RGB-only scene encoder.
+discussion rather than a packaged CLI. `tools/run_gsrecon_export.py` now
+implements the expected adapter path against `geometry_manifest.json`, but it
+still needs the full DiffSplat GPU dependency stack before it can run on H100.
 
 ### SAM 3
 
@@ -52,6 +65,6 @@ the final research-quality model.
 
 ## Zaratan
 
-Use the `gpu-h100` partition and `msml612pcs3-class` account by default. The
-Slurm templates are intentionally thin wrappers around `python3 -m latent_void`
-so the same configs can run locally and remotely.
+Use the `debug` partition for dry-run smoke checks and `gpu-h100` with
+`msml612pcs3-class` for heavy model stages. The Slurm templates are thin wrappers
+around `python3 -m latent_void` so the same configs can run locally and remotely.

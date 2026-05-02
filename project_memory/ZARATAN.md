@@ -105,6 +105,7 @@ scripts/setup_zaratan_deps.sh
 scripts/download_inpaint360gs.sh
 python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml --strict-paths
 python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
+python -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --dry-run
 sbatch slurm/zaratan_smoke.sbatch configs/zaratan_inpaint360gs_bag.yaml
 ```
 
@@ -113,6 +114,24 @@ COLMAP cameras found.
 
 The latest `debug` smoke Slurm job was canceled while pending for resources, so
 no smoke job is currently queued.
+
+## Heavy Geometry/Model Setup
+
+SAM 3 auth is active for the current account and the checkpoint downloaded to:
+
+```bash
+/home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/sam3/sam3.pt
+```
+
+Install model dependencies before running Marigold or GSRecon on H100:
+
+```bash
+INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
+```
+
+The zero-training geometry stage writes `runs/inpaint360gs_bag/geometry/geometry_manifest.json`.
+The GSRecon export stage consumes that manifest and writes `gaussians.npz`,
+`gs_grid.npy`, and `latent.npy`.
 
 ## Real Job Command
 

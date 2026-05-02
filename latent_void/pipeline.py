@@ -11,6 +11,7 @@ def run_dirs(config):
     return {
         "root": ensure_dir(output_dir),
         "manifests": ensure_dir(os.path.join(output_dir, "manifests")),
+        "geometry": ensure_dir(os.path.join(output_dir, "geometry")),
         "gsrecon": ensure_dir(os.path.join(output_dir, "gsrecon")),
         "masks": ensure_dir(os.path.join(output_dir, "masks")),
         "void": ensure_dir(os.path.join(output_dir, "void")),
@@ -39,14 +40,34 @@ def discover_dataset(config):
     return summary
 
 
+def prepare_geometry(config, dry_run=False):
+    dirs = run_dirs(config)
+    command = get_nested(config, "external.geometry_command", "")
+    if not command:
+        return {"skipped": True, "reason": "external.geometry_command is empty"}
+    values = {
+        "config_path": config.get("_config_path", ""),
+        "dataset_root": get_nested(config, "dataset.root"),
+        "scene_id": get_nested(config, "dataset.scene"),
+        "geometry_dir": dirs["geometry"],
+        "geometry_manifest": os.path.join(dirs["geometry"], "geometry_manifest.json"),
+    }
+    result = run_command(command, values, dry_run=dry_run)
+    write_json(os.path.join(dirs["geometry"], "geometry_command.json"), result)
+    return result
+
+
 def run_gsrecon(config, dry_run=False):
     dirs = run_dirs(config)
     values = {
         "config_path": config.get("_config_path", ""),
         "diffsplat_root": get_nested(config, "checkpoints.diffsplat_root"),
         "gsrecon_weights": get_nested(config, "checkpoints.gsrecon_weights"),
+        "gsvae_weights": get_nested(config, "checkpoints.gsvae_weights"),
         "dataset_root": get_nested(config, "dataset.root"),
         "scene_id": get_nested(config, "dataset.scene"),
+        "geometry_dir": dirs["geometry"],
+        "geometry_manifest": os.path.join(dirs["geometry"], "geometry_manifest.json"),
         "gsrecon_dir": dirs["gsrecon"],
     }
     result = run_command(get_nested(config, "external.gsrecon_command", ""), values, dry_run=dry_run)
@@ -162,9 +183,13 @@ def run_latent_inpaint(config, dry_run=False):
     return result
 
 
-def run_pipeline(config, dry_run=False, skip_reconstruct=False, skip_segment=False):
+def run_pipeline(config, dry_run=False, skip_geometry=False, skip_reconstruct=False, skip_segment=False):
     validate(config)
     results = {"dataset": discover_dataset(config)}
+    if not skip_geometry:
+        geometry_result = prepare_geometry(config, dry_run=dry_run)
+        if not geometry_result.get("skipped"):
+            results["geometry"] = geometry_result
     if not skip_reconstruct:
         results["reconstruct"] = run_gsrecon(config, dry_run=dry_run)
     if not skip_segment:

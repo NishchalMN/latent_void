@@ -14,7 +14,7 @@ Last updated: 2026-05-02
 - Branch:
   `main`
 - Latest pushed commit before this memory update:
-  `a91b4ac Run smoke job on CPU debug partition`
+  `8c97d67 Ignore Zaratan venv directory`
 
 Implemented and verified locally:
 
@@ -22,6 +22,11 @@ Implemented and verified locally:
 - Inpaint360GS dataset discovery.
 - DiffSplat/GSRecon external command dry-run rendering.
 - SAM 3 external command dry-run rendering.
+- Marigold geometry preprocessing command dry-run rendering.
+- Local coordinate-map reprojection from COLMAP cameras and depth maps.
+- GSRecon export adapter now accepts `geometry_manifest.json` and is able to
+  export `gaussians.npz`, `gs_grid.npy`, and `latent.npy` once DiffSplat GPU
+  dependencies are available.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
@@ -45,6 +50,8 @@ Implemented and verified locally:
   - `gsrecon_gobj265k_cnp_even4`
   - `gsvae_gobj265k_sdxl_fp16`
   - `gsdiff_gobj83k_pas_fp16__render`
+- SAM 3 checkpoint download now succeeds on Zaratan after HF auth:
+  `checkpoints/sam3/sam3.pt`.
 - Inpaint360GS `bag` scene discovery works on Zaratan:
   - `num_images`: 156
   - selected views with current config: 16
@@ -60,6 +67,8 @@ python3 -m latent_void validate-config --config configs/inpaint360gs_example.yam
 python3 -m latent_void run --config configs/inpaint360gs_example.yaml --dry-run
 bash -n scripts/pull_zaratan.sh scripts/push_main.sh slurm/zaratan_smoke.sbatch slurm/zaratan_inpaint.sbatch
 bash -n scripts/setup_zaratan_deps.sh scripts/download_inpaint360gs.sh
+python3 -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_bag_dry --dry-run
+python3 -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/zaratan_bag_geometry_dry --dry-run
 ```
 
 Zaratan commands that passed on the login node:
@@ -73,6 +82,7 @@ scripts/setup_zaratan_deps.sh
 scripts/download_inpaint360gs.sh
 python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml --strict-paths
 python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
+python scripts/check_sam3_access.py --download
 ```
 
 ## What Fails Or Is Not Ready
@@ -84,9 +94,10 @@ python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag
   - no smoke job is left queued.
 - `configs/zaratan_inpaint360gs_bag.yaml` points at the downloaded Zaratan
   dataset/repo/checkpoint locations.
-- The installed DiffSplat and SAM 3 wrappers are wired to real Zaratan paths,
-  but the DiffSplat scene exporter and research-quality latent inpainting logic
-  are not complete yet.
+- The installed DiffSplat and SAM 3 wrappers are wired to real Zaratan paths.
+- DiffSplat scene exporter is implemented but not yet H100-tested with the full
+  DiffSplat GPU dependency stack.
+- Research-quality latent inpainting logic is not complete yet.
 - Zaratan SSH clone from GitHub failed due to missing public-key auth.
 - Zaratan HTTPS clone/pull works.
 - Zaratan login-node Python has `yaml` but not `numpy`.
@@ -101,12 +112,7 @@ python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag
 - The Gaussian `.npz` contract currently expects precomputed `uvs` and
   `visibility`. If GSRecon exports positions/cameras instead, projection must be
   added upstream or implemented in this repo.
-- SAM 3 checkpoint access requires Hugging Face authentication and accepted
-  access to the official Meta SAM 3 model repo.
-- Verified SAM 3 blocker on Zaratan:
-  - `facebook/sam3` metadata is visible.
-  - actual checkpoint file access fails with `GatedRepoError 401`.
-  - user must request/accept access and run `hf auth login` on Zaratan.
+- SAM 3 HF auth is resolved for the active Zaratan account.
 - DiffSplat upstream has training and generation scripts, but no direct
   `run_gsrecon.py` scene-export CLI. A wrapper contract now exists at
   `tools/run_gsrecon_export.py`; the actual exporter must be implemented once
@@ -114,7 +120,8 @@ python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag
 - DiffSplat's public GSRecon checkpoint is trained for GObjaverse-style
   four-view object inputs and expects RGB plus camera-derived Plucker rays and,
   by default, normal/coordinate channels. Inpaint360GS gives real scene RGB and
-  COLMAP poses, so a direct RGB-only call is not enough.
+  COLMAP poses, so `tools/preprocess_geometry.py` now generates Marigold depth,
+  Marigold normals, and reprojected coordinate maps.
 
 ## Important Current Artifacts
 
@@ -134,9 +141,8 @@ Generated local dry-run artifacts are ignored by Git under `runs/`.
 Resolve credentials and model-adapter blockers:
 
 - GSRecon scene-export adapter.
+- H100 test of Marigold geometry preprocessing and GSRecon export.
 - GSVAE latent inpainting adapter.
-- SAM 3 Hugging Face auth/checkpoints.
-- Normal/coordinate-map strategy for DiffSplat GSRecon scene encoding.
 
 Then run:
 

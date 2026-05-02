@@ -24,5 +24,6 @@ echo "[latent_void] config: ${CONFIG}"
 
 python -m latent_void validate-config --config "${CONFIG}"
 python -m latent_void discover-dataset --config "${CONFIG}"
+python -m latent_void prepare-geometry --config "${CONFIG}" --dry-run
 python -m latent_void reconstruct --config "${CONFIG}" --dry-run
 python -m latent_void segment --config "${CONFIG}" --dry-run
