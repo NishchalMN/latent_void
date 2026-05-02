@@ -76,6 +76,8 @@ python3 -m latent_void run --config configs/inpaint360gs_example.yaml --dry-run
   with NumPy, likely inside the GPU/model environment or container.
 - Zaratan's Python module prepends global package paths via `PYTHONPATH`; setup
   and Slurm scripts now unset `PYTHONPATH` before activating the project venv.
+- Avoid self-upgrading `pip` inside the active Zaratan venv; that step hung
+  once after uninstalling the existing pip package and was removed from setup.
 - The fallback latent inpaint is only a plumbing test. It is not research-quality
   native latent inpainting.
 - The Gaussian `.npz` contract currently expects precomputed `uvs` and

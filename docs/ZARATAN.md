@@ -40,7 +40,8 @@ rendering. It should not spend meaningful GPU time.
 Inpaint360GS. It also downloads DiffSplat's PixArt-Sigma checkpoint bundle when
 missing. Set `INSTALL_GPU_DEPS=1` for the heavier PyTorch/SAM3/DiffSplat Python
 package install; the default path stays lightweight for config and dataset
-validation.
+validation. The script intentionally does not self-upgrade `pip` inside the
+active Zaratan venv.
 
 ## Real Job
 
