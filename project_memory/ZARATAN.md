@@ -145,6 +145,12 @@ sbatch slurm/zaratan_reconstruct.sbatch configs/zaratan_inpaint360gs_bag.yaml --
 sbatch slurm/zaratan_segment.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini
 ```
 
+If submitting an A100 backup, override both partition and GRES:
+
+```bash
+sbatch --partition=gpu-a100 --gres=gpu:a100:1 slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini_a100
+```
+
 Current geometry bring-up:
 
 - `19185136` ran on `gpu-a6-4.zaratan.umd.edu` and failed because
@@ -159,6 +165,8 @@ Current geometry bring-up:
   bring-up target is `19185139` on `gpu-h100`.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.
+- Zaratan must pull the current GitHub commit before `19185139` starts so the
+  queued job sees the Marigold depth squeeze plus SAM/latent mask grid fixes.
 
 ## Quota Note
 

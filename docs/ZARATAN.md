@@ -61,6 +61,14 @@ The first command runs the zero-training Marigold geometry preprocessing. The
 second consumes `geometry_manifest.json` and runs DiffSplat GSRecon/GSVAE. The
 third runs SAM 3 masks for the configured prompt.
 
+If an A100 smoke is useful while an H100 job is pending, override both the
+partition and the GPU type; overriding only the partition leaves the H100 GRES
+request in place:
+
+```bash
+sbatch --partition=gpu-a100 --gres=gpu:a100:1 slurm/zaratan_geometry.sbatch configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_mini_a100
+```
+
 ## Real Job
 
 Copy and edit the example config with real checkpoint and dataset paths:

@@ -39,6 +39,11 @@ and records the camera normalization transform in the manifest. A
 `geometry.coord_mode: diffsplat` option is available for the stricter
 `coord * 0.5 + 0.5` encoding used by the original GObjaverse path.
 
+The current public DiffSplat GSRecon/GSVAE options concatenate RGB, normal, and
+coordinate maps as model inputs; Marigold depth is saved and used to compute the
+coordinate maps. The exported 12-channel GSVAE grid follows DiffSplat's actual
+order: RGB, scale, rotation quaternion, opacity, depth.
+
 ### GSRecon
 
 Configured by `external.gsrecon_command`. It receives formatted values such as
@@ -48,6 +53,9 @@ Expected useful outputs:
 
 - `gaussians.npz`: Gaussian arrays. Minimum for mask fusion is either
   `positions` with camera metadata or precomputed `uvs` and `visibility`.
+  The local exporter also stores `gaussian_grid_shape`, `latent_shape`, and
+  `gs_grid_shape` so a Gaussian deletion mask can be mapped back to the correct
+  per-view latent grid.
 - `latent.npy`: optional GSVAE latent tensor.
 - `gs_grid.npy`: optional 12-channel Gaussian grid.
 - rendered RGB/depth/alpha views for SAM 3 and diagnostics.

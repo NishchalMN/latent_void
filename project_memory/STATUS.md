@@ -13,8 +13,8 @@ Last updated: 2026-05-02
   `/home/gnanesh/scratch.msml612pcs3/latent_void`
 - Branch:
   `main`
-- Latest pushed commit before this memory update:
-  `da7d56f Record Zaratan geometry queue state`
+- Latest pushed code commit before this documentation update:
+  `02218cd Align geometry and mask shapes for GSRecon`
 
 Implemented and verified locally:
 
@@ -37,6 +37,15 @@ Implemented and verified locally:
   Transformers backend or the cloned `facebookresearch/sam3` repo backend.
 - SAM 3 masks are resized to the geometry input resolution in the Zaratan
   command so mask fusion uses the same pixel grid as projected Gaussians.
+- Marigold depth predictions with trailing singleton channels are squeezed to
+  2D before resizing/reprojection.
+- DiffSplat Gaussian channel metadata now matches the upstream GSVAE order:
+  RGB, scale, rotation quaternion, opacity, depth.
+- GSRecon export now stores Gaussian grid shape, latent shape, and GSVAE grid
+  shape in `gaussians.npz`.
+- Latent void masks now use GSRecon's `[B, V, H, W]` Gaussian grid shape and
+  the actual `latent.npy` shape instead of flattening all Gaussians into an
+  arbitrary square grid.
 - Staged H100 Slurm scripts exist for geometry, GSRecon/GSVAE reconstruction,
   and SAM 3 segmentation.
 - Multi-view mask fusion with synthetic projected Gaussian data.
@@ -102,6 +111,17 @@ python3 -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_ba
 python3 -m py_compile latent_void/geometry.py latent_void/pipeline.py latent_void/cli.py tools/preprocess_geometry.py tools/run_gsrecon_export.py tools/run_sam3_multiview.py
 ```
 
+Latest local validation after the mask/grid fixes:
+
+```bash
+python3 -m py_compile tools/preprocess_geometry.py tools/run_sam3_multiview.py tools/run_gsrecon_export.py latent_void/latent.py latent_void/pipeline.py latent_void/masks.py latent_void/gaussians.py
+python3 -m unittest discover -s tests
+python3 -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_dry_after_mask_fixes --set pipeline.max_views=4 --dry-run
+```
+
+The local smoke environment lacks Pillow, so the two Pillow-dependent unit
+checks are skipped locally. They should run inside the Zaratan venv.
+
 Zaratan commands that passed on the login node:
 
 ```bash
@@ -138,7 +158,11 @@ INSTALL_GPU_DEPS=1 DOWNLOAD_DIFFSPLAT_CKPTS=0 MAX_JOBS=4 scripts/setup_zaratan_d
   - partition: `gpu-a100`
   - output: `runs/inpaint360gs_bag_mini_a100`
   - final state at latest check: canceled / no longer in `squeue`
-- A later stray A100 submission was also canceled for the same reason:
+- A later A100 submission initially failed because only the partition was
+  overridden and the H100 GRES remained active. The corrected command must
+  override both `--partition=gpu-a100` and `--gres=gpu:a100:1`.
+- The corrected A100 job was then canceled so the active bring-up remains the
+  H100 job:
   - job id: `19186443`
   - estimated start before cancellation: `2026-05-02T21:00:00`
   - final state at latest check: canceled / no longer in `squeue`
@@ -200,7 +224,9 @@ INSTALL_GPU_DEPS=1 DOWNLOAD_DIFFSPLAT_CKPTS=0 MAX_JOBS=4 scripts/setup_zaratan_d
   four-view object inputs and expects RGB plus camera-derived Plucker rays and,
   by default, normal/coordinate channels. Inpaint360GS gives real scene RGB and
   COLMAP poses, so `tools/preprocess_geometry.py` now generates Marigold depth,
-  Marigold normals, and reprojected coordinate maps.
+  Marigold normals, and reprojected coordinate maps. Depth is saved and used for
+  coordinate reprojection; it is not concatenated into the current public
+  GSRecon checkpoint input because upstream `input_depth` is not enabled.
 
 ## Important Current Artifacts
 
@@ -224,6 +250,9 @@ squeue -j 19185139 -o '%.18i %.9P %.30j %.8T %.10M %.10l %.30R'
 tail -120 logs/latent-void-geom-19185139.out
 tail -120 logs/latent-void-geom-19185139.err
 ```
+
+Before it starts, make sure Zaratan has pulled the latest GitHub commit so the
+queued Slurm job uses the mask/grid-alignment fixes.
 
 After geometry succeeds, continue with:
 
