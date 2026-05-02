@@ -114,7 +114,8 @@ python scripts/check_sam3_access.py --download
   `TORCH_CUDA_ARCH_LIST=9.0` for H100 builds. A manual compile succeeded after
   setting `CUDA_HOME` from `nvcc`; setup now overwrites stale `CUDA_HOME` values
   when `nvcc` is visible. Setup also keeps `setuptools<82` because Torch 2.11
-  declares that upper bound.
+  declares that upper bound. If `nvcc` is still hidden in non-interactive
+  module execution, setup now falls back to Zaratan's CVMFS CUDA 12.3 install.
 - The SAM 3 Transformers/repo backend auto-selection is implemented but not yet
   H100-tested on a real image.
 - Research-quality latent inpainting logic is not complete yet.

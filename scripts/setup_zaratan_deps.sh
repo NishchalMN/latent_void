@@ -30,6 +30,25 @@ clone_or_update_recursive() {
   fi
 }
 
+resolve_cuda_home() {
+  if command -v nvcc >/dev/null 2>&1; then
+    CUDA_HOME="$(cd "$(dirname "$(command -v nvcc)")/.." && pwd)"
+  else
+    for nvcc_path in \
+      /cvmfs/hpcsw.umd.edu/spack-software/*/linux-rhel8-*/gcc-11.3.0/cuda-12.3.0-*/bin/nvcc \
+      /usr/local/cuda*/bin/nvcc; do
+      if [[ -x "${nvcc_path}" ]]; then
+        CUDA_HOME="$(cd "$(dirname "${nvcc_path}")/.." && pwd)"
+        break
+      fi
+    done
+  fi
+  if [[ -n "${CUDA_HOME:-}" ]]; then
+    export CUDA_HOME
+    export PATH="${CUDA_HOME}/bin:${PATH}"
+  fi
+}
+
 clone_or_update https://github.com/chenguolin/DiffSplat.git external/DiffSplat
 clone_or_update https://github.com/facebookresearch/sam3.git external/sam3
 clone_or_update https://github.com/dfki-av/Inpaint360GS.git external/Inpaint360GS
@@ -59,9 +78,8 @@ if [[ "${INSTALL_GPU_DEPS:-0}" == "1" ]]; then
   mkdir -p external/DiffSplat/extensions
   clone_or_update_recursive https://github.com/BaowenZ/RaDe-GS.git external/DiffSplat/extensions/RaDe-GS
   export MAX_JOBS="${MAX_JOBS:-4}"
-  if command -v nvcc >/dev/null 2>&1; then
-    export CUDA_HOME="$(cd "$(dirname "$(command -v nvcc)")/.." && pwd)"
-  fi
+  resolve_cuda_home
+  echo "[cuda] CUDA_HOME=${CUDA_HOME:-unset}"
   export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-9.0}"
   python -m pip install --no-build-isolation external/DiffSplat/extensions/RaDe-GS/submodules/diff-gaussian-rasterization
 fi
