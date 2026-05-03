@@ -14,6 +14,7 @@ if REPO_ROOT not in sys.path:
 
 from latent_void.diffsplat_compat import (
     patch_diffusers_model_paths,
+    patch_gaussian_rasterizer_compat,
     patch_optional_imports,
     patch_transformers_compat,
     resolve_aux_model_paths,
@@ -126,6 +127,7 @@ def _run_model(args, manifest):
 
     patch_transformers_compat()
     patch_optional_imports()
+    patch_gaussian_rasterizer_compat()
     patch_diffusers_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
     from src.models import GSRecon, GSAutoencoderKL
     from src.options import opt_dict

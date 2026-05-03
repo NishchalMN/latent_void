@@ -106,3 +106,45 @@ def patch_diffusers_model_paths(sdxl_vae_path="", tiny_vae_path=""):
     AutoencoderKL.from_pretrained = classmethod(kl_from_pretrained)
     AutoencoderTiny.from_pretrained = classmethod(tiny_from_pretrained)
     return True
+
+
+def patch_gaussian_rasterizer_compat():
+    """Adapt older diff-gaussian-rasterization builds to DiffSplat's render API."""
+    try:
+        import torch
+        import diff_gaussian_rasterization as dgr
+    except Exception:
+        return False
+
+    patched = False
+    settings = getattr(dgr, "GaussianRasterizationSettings", None)
+    fields = getattr(settings, "_fields", ()) if settings is not None else ()
+    if settings is not None and "require_coord" not in fields:
+        original_settings = settings
+
+        def compat_settings(*args, **kwargs):
+            kwargs.pop("require_coord", None)
+            return original_settings(*args, **kwargs)
+
+        compat_settings._latent_void_original = original_settings
+        compat_settings._fields = fields
+        dgr.GaussianRasterizationSettings = compat_settings
+        patched = True
+
+    rasterizer = getattr(dgr, "GaussianRasterizer", None)
+    forward = getattr(rasterizer, "forward", None) if rasterizer is not None else None
+    if forward is not None and not getattr(forward, "_latent_void_compat", False):
+
+        def compat_forward(self, *args, **kwargs):
+            outputs = forward(self, *args, **kwargs)
+            if isinstance(outputs, tuple) and len(outputs) == 6:
+                image, radii, depth, mdepth, alpha, normal = outputs
+                empty = torch.empty(0, dtype=image.dtype, device=image.device)
+                return image, radii, empty, empty, depth, mdepth, alpha, normal
+            return outputs
+
+        compat_forward._latent_void_compat = True
+        rasterizer.forward = compat_forward
+        patched = True
+
+    return patched
