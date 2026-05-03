@@ -59,6 +59,9 @@ Implemented and verified locally:
 - Geometry external command formatting now passes `pipeline.max_views` through
   as `--max-views`, so `--set pipeline.max_views=...` affects Marigold
   preprocessing instead of only the dataset summary.
+- GSRecon export now patches DiffSplat's older Transformers import expectation
+  by aliasing `transformers.pytorch_utils.apply_chunking_to_forward` onto
+  `transformers.modeling_utils` before importing DiffSplat.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
@@ -304,6 +307,11 @@ Latest Zaratan geometry note:
 - That run processed 16 views because the older geometry command did not yet
   pass the `--set pipeline.max_views=4` override into `tools/preprocess_geometry.py`.
   The local fix after that run adds the missing `--max-views` command contract.
+- Direct `srun` reconstruct job `19186528` allocated on
+  `gpu-a6-4.zaratan.umd.edu` and failed at DiffSplat import time because
+  Zaratan has Transformers `5.7.0`; the symbol
+  `apply_chunking_to_forward` moved from `transformers.modeling_utils` to
+  `transformers.pytorch_utils`. The adapter shim fixes this for the next run.
 
 Remaining model-adapter blocker:
 

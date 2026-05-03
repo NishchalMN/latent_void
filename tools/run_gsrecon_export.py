@@ -82,6 +82,21 @@ def _load_scene_tensors(manifest, torch, device, num_input_views):
     }
 
 
+def _patch_transformers_compat():
+    try:
+        import transformers.modeling_utils as modeling_utils
+    except Exception:
+        return False
+    if hasattr(modeling_utils, "apply_chunking_to_forward"):
+        return False
+    try:
+        from transformers.pytorch_utils import apply_chunking_to_forward
+    except Exception:
+        return False
+    modeling_utils.apply_chunking_to_forward = apply_chunking_to_forward
+    return True
+
+
 def _project_points(points, c2ws, fxfycxcy, height, width):
     uvs = np.zeros((len(c2ws), points.shape[0], 2), dtype=np.float32)
     visibility = np.zeros((len(c2ws), points.shape[0]), dtype=np.uint8)
@@ -110,6 +125,7 @@ def _run_model(args, manifest):
     import torch
     from einops import rearrange
 
+    _patch_transformers_compat()
     from src.models import GSRecon, GSAutoencoderKL
     from src.options import opt_dict
     from src.utils import unproject_depth

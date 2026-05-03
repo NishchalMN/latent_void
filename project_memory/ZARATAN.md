@@ -189,6 +189,11 @@ Current geometry bring-up:
   `--set pipeline.max_views=4` override. The follow-up local patch adds
   `{max_views}` to the geometry command values and `--max-views {max_views}` to
   the Zaratan config.
+- Direct `srun` reconstruct job `19186528` allocated on `gpu-a6-4` and failed
+  with `ImportError: cannot import name 'apply_chunking_to_forward' from
+  'transformers.modeling_utils'`. Zaratan has Transformers `5.7.0`, where that
+  helper is available from `transformers.pytorch_utils`. The follow-up adapter
+  patch aliases the helper before DiffSplat imports.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.
