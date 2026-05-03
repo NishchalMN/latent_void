@@ -201,6 +201,8 @@ Current geometry bring-up:
 - The next interactive retry passed the Transformers shim and failed on
   missing `wandb`. The adapter now stubs a no-op `wandb` module before DiffSplat
   imports, since export/inference does not need logging.
+- The first no-op `wandb` stub raised `ValueError: wandb.__spec__ is None`;
+  the follow-up patch assigns a `ModuleSpec` to the stub.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.

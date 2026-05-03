@@ -319,6 +319,9 @@ Latest Zaratan geometry note:
 - The following retry reached DiffSplat imports and failed on missing `wandb`.
   The adapter now installs a no-op `wandb` module before importing DiffSplat,
   because GSRecon export does not need experiment logging.
+- The first `wandb` stub needed a `ModuleSpec`; without it, importlib checks
+  raised `ValueError: wandb.__spec__ is None`. The stub now sets
+  `wandb.__spec__`.
 
 Remaining model-adapter blocker:
 

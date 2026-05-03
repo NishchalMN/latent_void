@@ -112,10 +112,12 @@ def _patch_transformers_compat():
 
 
 def _patch_optional_imports():
+    import importlib.machinery
     import types
 
     if "wandb" not in sys.modules:
         wandb = types.ModuleType("wandb")
+        wandb.__spec__ = importlib.machinery.ModuleSpec("wandb", loader=None)
 
         def noop(*args, **kwargs):
             return None
