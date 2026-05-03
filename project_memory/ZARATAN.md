@@ -113,6 +113,13 @@ COLMAP cameras found.
 
 The older `debug` smoke Slurm job was canceled while pending for resources.
 Current bring-up uses direct `srun` commands in the `zaratan` tmux session.
+For the current interactive workflow, the local `zaratan` tmux session is SSHed
+to the login node and attached to a remote tmux session named `latent_void`.
+Remote windows:
+
+- `latent_void:srun`: keep the interactive H100 shell alive.
+- `latent_void:sync`: pull from GitHub, inspect files, and run login-node
+  downloads/preflights while `srun` stays active.
 
 ## Heavy Geometry/Model Setup
 
@@ -216,6 +223,22 @@ Current geometry bring-up:
   those local snapshot paths explicit and maps the hardcoded repo IDs to
   `checkpoints/diffsplat_aux/sdxl-vae-fp16-fix` and
   `checkpoints/diffsplat_aux/taesdxl`.
+- Interactive H100 allocation `19186674` on `gpu-a6-4` completed the full MVP
+  plumbing for `runs/inpaint360gs_bag_srun_h100`:
+  - geometry manifest: 16 views
+  - GSRecon/GSVAE export: 262,144 Gaussians, `latent.npy`, `gs_grid.npy`,
+    `gaussians.npz`
+  - SAM 3 segmentation: Transformers backend, prompt `bag`, 16 masks
+  - fusion: 1,701 deleted Gaussians
+  - fallback latent inpaint: `inpaint/latent_inpainted.npy`
+  - render diagnostics: `render_status.json` is `ok: true`, with 8 before and
+    8 after RGB renders plus alpha/depth diagnostics.
+- Render failures fixed during `19186674`:
+  - Zaratan's installed `diff_gaussian_rasterization` lacks DiffSplat's
+    `require_coord` setting and returns 6 tensors instead of DiffSplat's
+    expected 8; commit `af7c5b8` adds a runtime compatibility shim.
+  - DiffSplat returns `raw_depth`, not `depth`; commit `91c992f` makes the
+    render wrapper accept either key.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.

@@ -13,8 +13,8 @@ Last updated: 2026-05-02
   `/home/gnanesh/scratch.msml612pcs3/latent_void`
 - Branch:
   `main`
-- Latest pushed repo/code commit before the current `srun` wrapper update:
-  `9eafb28 Use local Marigold snapshots on Zaratan`
+- Latest pushed repo/code commit:
+  `91c992f Handle DiffSplat raw depth render outputs`
 
 Implemented and verified locally:
 
@@ -69,6 +69,13 @@ Implemented and verified locally:
   and `madebyollin/taesdxl` repo IDs to those local snapshots.
 - `scripts/download_diffsplat_aux.py` downloads those VAE snapshots on the
   login node, and `scripts/setup_zaratan_deps.sh` calls it by default.
+- DiffSplat rasterizer compatibility is patched at runtime for Zaratan's
+  installed `diff_gaussian_rasterization` build. The shim drops DiffSplat's
+  newer `require_coord` setting when the installed rasterizer does not support
+  it and expands 6-tensor rasterizer returns to DiffSplat's expected 8-tensor
+  shape.
+- Render diagnostics tolerate DiffSplat returning `raw_depth` instead of
+  `depth`.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
@@ -116,6 +123,32 @@ Implemented and verified locally:
   - COLMAP cameras loaded from binary `sparse/0`
   - first selected view: `IMG_0087`
   - last selected view: `IMG_0102`
+
+Latest real H100 MVP run:
+
+- Active output directory:
+  `runs/inpaint360gs_bag_srun_h100`
+- Interactive allocation:
+  `srun` job `19186674` on `gpu-a6-4`, inside remote tmux session
+  `latent_void:srun`.
+- Geometry completed with Marigold-derived depth/normals and coordinate maps:
+  `geometry/geometry_manifest.json`, 16 views.
+- GSRecon/GSVAE export completed:
+  `gsrecon/gaussians.npz`, `gsrecon/gs_grid.npy`, `gsrecon/latent.npy`.
+  Status reported 262,144 Gaussians, 16 projection views, and input views
+  `IMG_0087` through `IMG_0090`.
+- SAM 3 segmentation completed through the Transformers backend with prompt
+  `bag`. It wrote 16 resized masks in `masks/`; scores were high
+  (`~0.92` to `~0.97`) and masks occupied roughly `1.2%` to `1.3%` of each
+  256x256 view.
+- Gaussian mask fusion completed:
+  `void/void_manifest.json` reports 1,701 deleted Gaussians out of 262,144.
+- MVP fallback latent inpaint completed:
+  `inpaint/latent_inpainted.npy`.
+- GSVAE/DiffSplat render diagnostics completed:
+  `renders/render_status.json` is `ok: true`, with 8 before RGB views, 8 after
+  RGB views, 8 alpha maps per side, and 8 depth arrays per side. Pixel stats on
+  sampled PNGs are nonblank.
 
 Local commands that passed:
 
@@ -240,8 +273,8 @@ also produced the expected `tools/render_latent_scene.py` command.
 - `configs/zaratan_inpaint360gs_bag.yaml` points at the downloaded Zaratan
   dataset/repo/checkpoint locations.
 - The installed DiffSplat and SAM 3 wrappers are wired to real Zaratan paths.
-- DiffSplat scene exporter is implemented but not yet H100-tested with the full
-  DiffSplat GPU dependency stack.
+- DiffSplat scene exporter is now H100-tested for the Inpaint360GS `bag` scene
+  through GSRecon/GSVAE export.
 - The heavy dependency setup that compiles DiffSplat's Gaussian rasterizer is
   added but not yet fully validated on Zaratan. First attempt installed torch,
   SAM 3, DiffSplat requirements, Diffusers 0.35.2, and Transformers, then failed
@@ -253,8 +286,8 @@ also produced the expected `tools/render_latent_scene.py` command.
   when `nvcc` is visible. Setup also keeps `setuptools<82` because Torch 2.11
   declares that upper bound. If `nvcc` is still hidden in non-interactive
   module execution, setup now falls back to Zaratan's CVMFS CUDA 12.3 install.
-- The SAM 3 Transformers/repo backend auto-selection is implemented but not yet
-  H100-tested on a real image.
+- SAM 3 Transformers backend is now H100-tested on the Inpaint360GS `bag`
+  scene. The repo backend remains an untested fallback.
 - Research-quality latent inpainting logic is not complete yet.
 - Zaratan SSH clone from GitHub failed due to missing public-key auth.
 - Zaratan HTTPS clone/pull works.
