@@ -316,6 +316,9 @@ Latest Zaratan geometry note:
 - The first retry inside interactive `srun` exposed the next missing legacy
   helper: `find_pruneable_heads_and_indices`. It is absent from Transformers
   `5.7.0`, so the adapter now restores the older implementation locally.
+- The following retry reached DiffSplat imports and failed on missing `wandb`.
+  The adapter now installs a no-op `wandb` module before importing DiffSplat,
+  because GSRecon export does not need experiment logging.
 
 Remaining model-adapter blocker:
 

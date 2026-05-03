@@ -111,6 +111,24 @@ def _patch_transformers_compat():
     return patched
 
 
+def _patch_optional_imports():
+    import types
+
+    if "wandb" not in sys.modules:
+        wandb = types.ModuleType("wandb")
+
+        def noop(*args, **kwargs):
+            return None
+
+        wandb.init = noop
+        wandb.log = noop
+        wandb.finish = noop
+        wandb.define_metric = noop
+        wandb.Image = lambda *args, **kwargs: args[0] if args else None
+        wandb.run = None
+        sys.modules["wandb"] = wandb
+
+
 def _project_points(points, c2ws, fxfycxcy, height, width):
     uvs = np.zeros((len(c2ws), points.shape[0], 2), dtype=np.float32)
     visibility = np.zeros((len(c2ws), points.shape[0]), dtype=np.uint8)
@@ -140,6 +158,7 @@ def _run_model(args, manifest):
     from einops import rearrange
 
     _patch_transformers_compat()
+    _patch_optional_imports()
     from src.models import GSRecon, GSAutoencoderKL
     from src.options import opt_dict
     from src.utils import unproject_depth

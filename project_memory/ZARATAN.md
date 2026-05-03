@@ -198,6 +198,9 @@ Current geometry bring-up:
   `find_pruneable_heads_and_indices`, which is absent from Transformers
   `5.7.0`. The next local patch restores the old helper implementation in the
   adapter shim and aliases `prune_linear_layer` plus `Conv1D` as well.
+- The next interactive retry passed the Transformers shim and failed on
+  missing `wandb`. The adapter now stubs a no-op `wandb` module before DiffSplat
+  imports, since export/inference does not need logging.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.
