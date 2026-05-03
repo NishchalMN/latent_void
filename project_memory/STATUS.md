@@ -60,8 +60,9 @@ Implemented and verified locally:
   as `--max-views`, so `--set pipeline.max_views=...` affects Marigold
   preprocessing instead of only the dataset summary.
 - GSRecon export now patches DiffSplat's older Transformers import expectation
-  by aliasing `transformers.pytorch_utils.apply_chunking_to_forward` onto
-  `transformers.modeling_utils` before importing DiffSplat.
+  by aliasing legacy `transformers.modeling_utils` helpers from
+  `transformers.pytorch_utils` and locally restoring
+  `find_pruneable_heads_and_indices` before importing DiffSplat.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
@@ -312,6 +313,9 @@ Latest Zaratan geometry note:
   Zaratan has Transformers `5.7.0`; the symbol
   `apply_chunking_to_forward` moved from `transformers.modeling_utils` to
   `transformers.pytorch_utils`. The adapter shim fixes this for the next run.
+- The first retry inside interactive `srun` exposed the next missing legacy
+  helper: `find_pruneable_heads_and_indices`. It is absent from Transformers
+  `5.7.0`, so the adapter now restores the older implementation locally.
 
 Remaining model-adapter blocker:
 

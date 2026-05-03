@@ -85,16 +85,30 @@ def _load_scene_tensors(manifest, torch, device, num_input_views):
 def _patch_transformers_compat():
     try:
         import transformers.modeling_utils as modeling_utils
+        import transformers.pytorch_utils as pytorch_utils
     except Exception:
         return False
-    if hasattr(modeling_utils, "apply_chunking_to_forward"):
-        return False
-    try:
-        from transformers.pytorch_utils import apply_chunking_to_forward
-    except Exception:
-        return False
-    modeling_utils.apply_chunking_to_forward = apply_chunking_to_forward
-    return True
+    patched = False
+    for name in ("apply_chunking_to_forward", "prune_linear_layer", "Conv1D"):
+        if not hasattr(modeling_utils, name) and hasattr(pytorch_utils, name):
+            setattr(modeling_utils, name, getattr(pytorch_utils, name))
+            patched = True
+    if not hasattr(modeling_utils, "find_pruneable_heads_and_indices"):
+        import torch
+
+        def find_pruneable_heads_and_indices(heads, n_heads, head_size, already_pruned_heads):
+            heads = set(heads) - set(already_pruned_heads)
+            mask = torch.ones(n_heads, head_size)
+            for head in heads:
+                head = head - sum(1 if pruned_head < head else 0 for pruned_head in already_pruned_heads)
+                mask[head] = 0
+            mask = mask.view(-1).contiguous().eq(1)
+            index = torch.arange(len(mask))[mask].long()
+            return heads, index
+
+        modeling_utils.find_pruneable_heads_and_indices = find_pruneable_heads_and_indices
+        patched = True
+    return patched
 
 
 def _project_points(points, c2ws, fxfycxcy, height, width):

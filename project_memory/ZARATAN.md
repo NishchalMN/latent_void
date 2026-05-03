@@ -194,6 +194,10 @@ Current geometry bring-up:
   'transformers.modeling_utils'`. Zaratan has Transformers `5.7.0`, where that
   helper is available from `transformers.pytorch_utils`. The follow-up adapter
   patch aliases the helper before DiffSplat imports.
+- The interactive H100 retry then exposed
+  `find_pruneable_heads_and_indices`, which is absent from Transformers
+  `5.7.0`. The next local patch restores the old helper implementation in the
+  adapter shim and aliases `prune_linear_layer` plus `Conv1D` as well.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.
