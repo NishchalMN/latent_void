@@ -3,7 +3,7 @@ import shutil
 import tempfile
 import unittest
 
-from latent_void.datasets import Inpaint360GSDataset
+from latent_void.datasets import DL3DVDataset, Inpaint360GSDataset, dataset_from_config
 
 
 class ColmapTests(unittest.TestCase):
@@ -35,6 +35,32 @@ class ColmapTests(unittest.TestCase):
             self.assertEqual(views[0].camera["model"], "PINHOLE")
             self.assertEqual(views[0].camera["intrinsics"]["fxfycxcy"], [200.0, 210.0, 190.0, 140.0])
             self.assertEqual(views[0].camera["c2w"][0][3], -1.0)
+        finally:
+            shutil.rmtree(tmp)
+
+    def test_dl3dv_loader_reads_json_frames(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            image_dir = os.path.join(tmp, "dl3dv_scene", "images")
+            os.makedirs(image_dir)
+            open(os.path.join(image_dir, "0001.png"), "w").close()
+            with open(os.path.join(tmp, "dl3dv_scene", "transforms.json"), "w") as handle:
+                handle.write('{"frames": [{"file_path": "images/0001.png", "camera": {"c2w": [[1,0,0,0],[0,1,0,0],[0,0,1,1],[0,0,0,1]]}}]}')
+
+            dataset = DL3DVDataset({
+                "dataset": {
+                    "root": tmp,
+                    "scene": "dl3dv_scene",
+                    "type": "dl3dv",
+                    "images_glob": "images/*.png",
+                }
+            })
+            views = dataset.views()
+            self.assertEqual(len(views), 1)
+            self.assertEqual(views[0].view_id, "0001")
+            self.assertEqual(views[0].camera["c2w"][2][3], 1)
+            self.assertTrue(dataset.summary()["has_cameras"])
+            self.assertIsInstance(dataset_from_config({"dataset": {"type": "dl3dv", "root": tmp, "scene": "dl3dv_scene"}}), DL3DVDataset)
         finally:
             shutil.rmtree(tmp)
 

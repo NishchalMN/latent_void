@@ -48,6 +48,91 @@ def normalize_camera_set(cameras, norm_radius=1.4, reference_index=0):
     }
 
 
+def local_canonical_transform(points, reference_c2w, camera_radius=1.4, mode="object_centered"):
+    """Build an object-centered world transform from masked 3D points.
+
+    The transform maps the masked point cloud center to the origin, aligns axes
+    to the reference camera, and scales the reference camera distance to the
+    DiffSplat-style camera radius.
+    """
+    import numpy as np
+
+    points = np.asarray(points, dtype=np.float32)
+    if points.ndim != 2 or points.shape[1] != 3:
+        raise ValueError("points must have shape [N, 3]")
+    finite = np.isfinite(points).all(axis=1)
+    if not finite.any():
+        raise ValueError("points do not contain finite coordinates")
+    points = points[finite]
+    reference_c2w = np.asarray(reference_c2w, dtype=np.float32)
+    if reference_c2w.shape != (4, 4):
+        raise ValueError("reference_c2w must have shape [4, 4]")
+
+    center = np.median(points, axis=0)
+    ref_translation = reference_c2w[:3, 3]
+    ref_radius = float(np.linalg.norm(ref_translation - center))
+    scale = float(camera_radius) / ref_radius if ref_radius > 1e-6 else 1.0
+    mode = (mode or "object_centered").lower()
+    rotation = reference_c2w[:3, :3].T
+    transform = np.eye(4, dtype=np.float32)
+    transform[:3, :3] = rotation * scale
+    if mode in ("first_view", "reference_view", "diffsplat"):
+        target_translation = np.asarray([0.0, 0.0, float(camera_radius)], dtype=np.float32)
+        transform[:3, 3] = target_translation - (rotation @ ref_translation) * scale
+    elif mode in ("object_centered", "centered"):
+        transform[:3, 3] = -(rotation @ center) * scale
+    else:
+        raise ValueError("unknown local canonicalization mode: %s" % mode)
+    return transform, {
+        "enabled": True,
+        "center": center.astype(float).tolist(),
+        "camera_radius": float(camera_radius),
+        "mode": mode,
+        "reference_camera_radius_before": ref_radius,
+        "scale": scale,
+        "reference_rotation_aligned": True,
+        "transform": transform.astype(float).tolist(),
+    }
+
+
+def apply_world_transform_to_points(points, transform):
+    import numpy as np
+
+    points = np.asarray(points, dtype=np.float32)
+    transform = np.asarray(transform, dtype=np.float32)
+    original_shape = points.shape
+    if points.shape[-1] != 3:
+        raise ValueError("points must have trailing coordinate dimension 3")
+    flat = points.reshape(-1, 3)
+    flat_h = np.concatenate([flat, np.ones((flat.shape[0], 1), dtype=np.float32)], axis=1)
+    transformed = flat_h @ transform.T
+    return transformed[:, :3].reshape(original_shape).astype(np.float32)
+
+
+def apply_world_transform_to_cameras(cameras, transform):
+    import copy
+
+    import numpy as np
+
+    transform = np.asarray(transform, dtype=np.float32)
+    linear = transform[:3, :3]
+    axis_scales = np.linalg.norm(linear, axis=0)
+    scale = float(axis_scales.mean()) if axis_scales.size else 1.0
+    rotation = linear / scale if scale > 1e-8 else linear
+    result = []
+    for camera in cameras:
+        item = copy.deepcopy(camera)
+        c2w = np.asarray(item.get("c2w"), dtype=np.float32)
+        if c2w.shape != (4, 4):
+            raise ValueError("camera must include c2w with shape [4, 4]")
+        transformed = np.eye(4, dtype=np.float32)
+        transformed[:3, :3] = rotation @ c2w[:3, :3]
+        transformed[:3, 3] = linear @ c2w[:3, 3] + transform[:3, 3]
+        item["c2w"] = transformed.astype(float).tolist()
+        result.append(item)
+    return result
+
+
 def scaled_intrinsics(camera, width, height):
     intrinsics = camera.get("intrinsics", {})
     source_width = float(camera.get("width", width))

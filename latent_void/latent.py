@@ -121,3 +121,39 @@ def fallback_inpaint_latent(latent, mask):
         fill_value = float(unmasked.mean()) if unmasked.size else 0.0
         channel[mask] = fill_value
     return np.moveaxis(moved, 0, channels_axis)
+
+
+def _spatial_neighbor_average(array):
+    padded = np.pad(array, [(0, 0)] * (array.ndim - 2) + [(1, 1), (1, 1)], mode="edge")
+    return (
+        padded[..., :-2, 1:-1]
+        + padded[..., 2:, 1:-1]
+        + padded[..., 1:-1, :-2]
+        + padded[..., 1:-1, 2:]
+    ) * 0.25
+
+
+def context_inpaint_latent(latent, mask, iterations=128):
+    """Harmonic latent fill that only updates masked cells from local context."""
+    original = np.asarray(latent)
+    output = np.array(original, copy=True)
+    mask = expand_mask_to_latent(mask, output)
+    if output.ndim < 3:
+        raise ValueError("latent must have shape [..., channels, height, width] or [channels, height, width]")
+    if not mask.any():
+        return output
+
+    moved = np.moveaxis(output, -3, 0)
+    original_moved = np.moveaxis(original, -3, 0)
+    iterations = max(1, int(iterations))
+    for channel_idx in range(moved.shape[0]):
+        channel = moved[channel_idx]
+        original_channel = original_moved[channel_idx]
+        unmasked = original_channel[~mask]
+        fill_value = float(unmasked.mean()) if unmasked.size else 0.0
+        channel[mask] = fill_value
+        for _ in range(iterations):
+            averaged = _spatial_neighbor_average(channel)
+            channel[mask] = averaged[mask]
+            channel[~mask] = original_channel[~mask]
+    return np.moveaxis(moved, 0, -3)

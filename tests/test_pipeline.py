@@ -73,6 +73,24 @@ class PipelineTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp)
 
+    def test_latent_inpaint_command_formats_iterations(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            config = {
+                "project": {"output_dir": tmp},
+                "dataset": {"type": "inpaint360gs", "root": tmp, "scene": "scene"},
+                "checkpoints": {"latent_inpaint_weights": ""},
+                "pipeline": {"latent_inpaint_iterations": 7},
+                "external": {
+                    "latent_inpaint_command": "python tools/inpaint_latent_context.py --latent-path {latent_path} --mask-path {mask_path} --output-path {output_path} --iterations {latent_inpaint_iterations}"
+                },
+            }
+            result = run_latent_inpaint(config, dry_run=True)
+            self.assertIn("--iterations 7", result["command"])
+            self.assertFalse(result.get("fallback", False))
+        finally:
+            shutil.rmtree(tmp)
+
 
 if __name__ == "__main__":
     unittest.main()

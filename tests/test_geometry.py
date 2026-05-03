@@ -2,7 +2,16 @@ import unittest
 
 import numpy as np
 
-from latent_void.geometry import encode_coordinate_maps, normalize_camera_set, normalize_coordinate_maps, scaled_intrinsics, unproject_depth_to_world
+from latent_void.geometry import (
+    apply_world_transform_to_cameras,
+    apply_world_transform_to_points,
+    encode_coordinate_maps,
+    local_canonical_transform,
+    normalize_camera_set,
+    normalize_coordinate_maps,
+    scaled_intrinsics,
+    unproject_depth_to_world,
+)
 
 
 class GeometryTests(unittest.TestCase):
@@ -59,6 +68,35 @@ class GeometryTests(unittest.TestCase):
         self.assertTrue(meta["enabled"])
         np.testing.assert_allclose(np.asarray(normalized[0]["c2w"])[:3, 3], [0.0, 0.0, 1.4], atol=1e-6)
         np.testing.assert_allclose(np.asarray(normalized[1]["c2w"])[:3, 3], [0.7, 0.0, 1.4], atol=1e-6)
+
+    def test_local_canonical_transform_centers_mask_and_aligns_reference(self):
+        points = np.array([
+            [1.0, 2.0, 3.0],
+            [1.0, 2.1, 3.0],
+            [0.9, 2.0, 3.1],
+        ], dtype=np.float32)
+        reference_c2w = np.eye(4, dtype=np.float32)
+        reference_c2w[:3, 3] = [1.0, 2.0, 5.0]
+        transform, meta = local_canonical_transform(points, reference_c2w, camera_radius=1.4)
+        self.assertTrue(meta["enabled"])
+        transformed = apply_world_transform_to_points(points, transform)
+        np.testing.assert_allclose(np.median(transformed, axis=0), [0.0, 0.0, 0.0], atol=1e-6)
+        camera = apply_world_transform_to_cameras([{"c2w": reference_c2w.tolist()}], transform)[0]
+        np.testing.assert_allclose(np.asarray(camera["c2w"])[:3, :3], np.eye(3), atol=1e-6)
+        self.assertAlmostEqual(float(np.linalg.norm(np.asarray(camera["c2w"])[:3, 3])), 1.4, places=5)
+
+    def test_local_canonical_transform_first_view_pose(self):
+        points = np.array([
+            [1.0, 2.0, 3.0],
+            [1.0, 2.1, 3.0],
+            [0.9, 2.0, 3.1],
+        ], dtype=np.float32)
+        reference_c2w = np.eye(4, dtype=np.float32)
+        reference_c2w[:3, 3] = [1.0, 2.0, 5.0]
+        transform, _ = local_canonical_transform(points, reference_c2w, camera_radius=1.4, mode="first_view")
+        camera = apply_world_transform_to_cameras([{"c2w": reference_c2w.tolist()}], transform)[0]
+        np.testing.assert_allclose(np.asarray(camera["c2w"])[:3, :3], np.eye(3), atol=1e-6)
+        np.testing.assert_allclose(np.asarray(camera["c2w"])[:3, 3], [0.0, 0.0, 1.4], atol=1e-6)
 
     def test_scaled_intrinsics(self):
         camera = {

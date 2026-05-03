@@ -14,7 +14,7 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 from latent_void.config import get_nested, load_config
-from latent_void.datasets import Inpaint360GSDataset
+from latent_void.datasets import dataset_from_config
 from latent_void.geometry import encode_coordinate_maps, normalize_camera_set, unproject_depth_to_world
 from latent_void.io import ensure_dir, write_json
 
@@ -82,6 +82,19 @@ def _save_rgb(path, image):
     return _save_array(path, np.transpose(rgb, (2, 0, 1)))
 
 
+def _load_rgb_image(path, size, white_background=True):
+    image = Image.open(path)
+    if image.mode == "RGBA":
+        rgba = image.resize(size, Image.BICUBIC)
+        array = np.asarray(rgba, dtype=np.float32) / 255.0
+        rgb = array[..., :3]
+        alpha = array[..., 3:4]
+        background = np.ones_like(rgb) if white_background else np.zeros_like(rgb)
+        rgb = rgb * alpha + background * (1.0 - alpha)
+        return Image.fromarray((np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8))
+    return image.convert("RGB").resize(size, Image.BICUBIC)
+
+
 def _normal_to_chw_01(normal):
     normal = np.asarray(normal, dtype=np.float32)
     if normal.ndim != 3 or normal.shape[-1] != 3:
@@ -125,13 +138,20 @@ def main():
     depth_scale = args.depth_scale if args.depth_scale is not None else float(geometry_config.get("depth_scale", 5.0))
     normalize_cameras = _as_bool(geometry_config.get("normalize_cameras", True))
     camera_norm_radius = float(geometry_config.get("camera_norm_radius", 1.4))
+    camera_reference_index = int(geometry_config.get("camera_reference_index", 0))
     coord_mode = geometry_config.get("coord_mode", "scene_minmax")
+    preprocessing_profile = geometry_config.get("preprocessing_profile", "latent_void")
+    white_background = _as_bool(geometry_config.get("white_background", True))
 
-    dataset = Inpaint360GSDataset(config)
+    dataset = dataset_from_config(config)
     views = dataset.views(max_views=max_views)
     cameras = [view.camera for view in views]
     if normalize_cameras:
-        normalized_cameras, camera_normalization = normalize_camera_set(cameras, norm_radius=camera_norm_radius)
+        normalized_cameras, camera_normalization = normalize_camera_set(
+            cameras,
+            norm_radius=camera_norm_radius,
+            reference_index=camera_reference_index,
+        )
     else:
         normalized_cameras = cameras
         camera_normalization = {"enabled": False, "reason": "disabled by config"}
@@ -145,6 +165,8 @@ def main():
             "normal_model": normal_model,
             "camera_normalization": camera_normalization,
             "coord_mode": coord_mode,
+            "preprocessing_profile": preprocessing_profile,
+            "white_background": white_background,
         }
         write_json(os.path.join(args.output_dir, "geometry_command.json"), result)
         print(json.dumps(result, indent=2))
@@ -158,7 +180,7 @@ def main():
     with torch.inference_mode():
         for idx, (view, camera) in enumerate(zip(views, normalized_cameras)):
             print("[latent_void] geometry view %d/%d %s" % (idx + 1, len(views), view.view_id), flush=True)
-            image = Image.open(view.image_path).convert("RGB").resize((input_res, input_res), Image.BICUBIC)
+            image = _load_rgb_image(view.image_path, (input_res, input_res), white_background=white_background)
             depth_output = depth_pipe(image, num_inference_steps=num_inference_steps, ensemble_size=ensemble_size)
             normal_output = normal_pipe(image, num_inference_steps=num_inference_steps, ensemble_size=ensemble_size)
             depth = _prediction_array(depth_output.prediction)
@@ -202,6 +224,17 @@ def main():
         "depth_scale": depth_scale,
         "camera_normalization": camera_normalization,
         "coord_normalization": coord_stats,
+        "preprocessing": {
+            "profile": preprocessing_profile,
+            "white_background": white_background,
+            "normal_encoding": "chw_01",
+            "coord_mode": coord_mode,
+            "diffsplat_contract": [
+                "RGB is composited over white before resize when alpha exists",
+                "normal and coordinate channels are stored as CHW values in [0, 1]",
+                "camera_reference_index controls first-view canonical normalization",
+            ],
+        },
         "views": entries,
     }
     write_json(os.path.join(args.output_dir, "geometry_manifest.json"), manifest)

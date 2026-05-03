@@ -49,8 +49,9 @@ does not self-upgrade `pip` inside the active Zaratan venv.
 
 ## Staged H100 `srun` Jobs
 
-Use direct `srun` stages in the `zaratan` tmux session while bringing up the
-real pipeline. The wrapper keeps the command interactive and defaults to the
+Use direct `srun` stages while bringing up the real pipeline. tmux is optional
+and only helps keep SSH sessions alive; the wrapper itself does not require it.
+The wrapper keeps the command interactive and defaults to the
 `msml612pcs3-class` account, `gpu-h100` partition, and `gpu:h100:1` GRES:
 
 ```bash

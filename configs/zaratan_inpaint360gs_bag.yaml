@@ -1,12 +1,12 @@
 project:
   name: latent_void_inpaint360gs_bag
-  output_dir: /home/gnanesh/scratch.msml612pcs3/latent_void/runs/inpaint360gs_bag
+  output_dir: runs/inpaint360gs_bag
   device: cuda
   seed: 1234
 
 dataset:
   type: inpaint360gs
-  root: /home/gnanesh/scratch.msml612pcs3/latent_void/data/inpaint360
+  root: data/inpaint360
   scene: bag
   images_glob: images/*.{JPG,jpg,jpeg,png}
   masks_glob: masks/*.{npy,png,jpg,jpeg}
@@ -18,35 +18,44 @@ prompts:
   include_shadow: false
 
 checkpoints:
-  diffsplat_root: /home/gnanesh/scratch.msml612pcs3/latent_void/external/DiffSplat
-  gsrecon_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat/gsrecon_gobj265k_cnp_even4
-  gsvae_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat/gsvae_gobj265k_sdxl_fp16
-  sdxl_vae_path: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat_aux/sdxl-vae-fp16-fix
-  tiny_vae_path: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat_aux/taesdxl
-  sam3_root: /home/gnanesh/scratch.msml612pcs3/latent_void/external/sam3
-  sam3_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/sam3/sam3.pt
+  diffsplat_root: external/DiffSplat
+  gsrecon_weights: checkpoints/diffsplat/gsrecon_gobj265k_cnp_even4
+  gsvae_weights: checkpoints/diffsplat/gsvae_gobj265k_sdxl_fp16
+  sdxl_vae_path: checkpoints/diffsplat_aux/sdxl-vae-fp16-fix
+  tiny_vae_path: checkpoints/diffsplat_aux/taesdxl
+  sam3_root: external/sam3
+  sam3_weights: checkpoints/sam3/sam3.pt
   latent_inpaint_weights: ""
 
 geometry:
   input_res: 256
   device: cuda
-  depth_model: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/marigold/depth-v1-1
-  normal_model: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/marigold/normals-v1-1
+  preprocessing_profile: diffsplat_gobjaverse
+  white_background: true
+  depth_model: checkpoints/marigold/depth-v1-1
+  normal_model: checkpoints/marigold/normals-v1-1
   num_inference_steps: 4
   ensemble_size: 1
   depth_scale: 5.0
   normalize_cameras: true
   camera_norm_radius: 1.4
-  coord_mode: scene_minmax
+  camera_reference_index: 0
+  coord_mode: diffsplat
 
 pipeline:
   max_views: 16
   mask_threshold: 0.55
+  mask_score_threshold: 0.0
+  mask_min_area: 0
+  mask_max_area_fraction: 1.0
+  mask_erode_pixels: 0
+  mask_dilate_pixels: 0
   latent_downsample: 8
+  latent_inpaint_iterations: 128
   gaussian_npz: ""
   latent_npy: ""
   mask_source: auto
-  allow_fallback_inpaint: true
+  allow_fallback_inpaint: false
 
 external:
   geometry_command: >-
@@ -73,7 +82,12 @@ external:
     --prompt "{prompt}"
     --output-dir {mask_dir}
     --resize-to {mask_resize}
-  latent_inpaint_command: ""
+  latent_inpaint_command: >-
+    python tools/inpaint_latent_context.py
+    --latent-path {latent_path}
+    --mask-path {mask_path}
+    --output-path {output_path}
+    --iterations {latent_inpaint_iterations}
   render_command: >-
     python tools/render_latent_scene.py
     --diffsplat-root {diffsplat_root}

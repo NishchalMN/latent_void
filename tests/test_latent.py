@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 
 from latent_void.gaussians import GAUSSIAN_CHANNELS
-from latent_void.latent import expand_mask_to_latent, fallback_inpaint_latent, latent_mask_from_gaussian_mask
+from latent_void.latent import context_inpaint_latent, expand_mask_to_latent, fallback_inpaint_latent, latent_mask_from_gaussian_mask
 
 
 class LatentTests(unittest.TestCase):
@@ -21,6 +21,15 @@ class LatentTests(unittest.TestCase):
         output = fallback_inpaint_latent(latent, mask)
         self.assertEqual(output[0, 1, 1], latent[0, 1, 1])
         self.assertNotEqual(output[0, 0, 0], latent[0, 0, 0])
+
+    def test_context_inpaint_preserves_unmasked_cells(self):
+        latent = np.arange(16, dtype=np.float32).reshape(1, 4, 4)
+        latent[0, 1:3, 1:3] = 100.0
+        mask = np.zeros((4, 4), dtype=bool)
+        mask[1:3, 1:3] = True
+        output = context_inpaint_latent(latent, mask, iterations=4)
+        self.assertTrue(np.allclose(output[:, ~mask], latent[:, ~mask]))
+        self.assertFalse(np.allclose(output[:, mask], latent[:, mask]))
 
     def test_gaussian_grid_mask_maps_to_per_view_latent_shape(self):
         gaussian_mask = np.zeros(2 * 4 * 4, dtype=bool)

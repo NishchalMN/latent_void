@@ -1,0 +1,108 @@
+project:
+  name: latent_void_native_training
+  output_dir: runs/native_latent_training
+  device: cuda
+  seed: 1234
+
+datasets:
+  train:
+    - type: inpaint360gs
+      root: data/inpaint360
+      scenes_glob: "*"
+  future_train:
+    - type: dl3dv
+      root: data/dl3dv
+      enabled: false
+  validation_holdout_scenes:
+    - bag
+    - car
+
+patches:
+  manifest_name: local_patch_manifest.json
+  crop_size: 256
+  input_views: 4
+  heldout_render_views: 4
+  crop_scale_range: [1.4, 2.2]
+  min_mask_area_fraction: 0.002
+  max_mask_area_fraction: 0.35
+  camera_profile: diffsplat_gobjaverse
+  builder_command: >-
+    python tools/build_scene_patch_dataset.py
+    --run-glob runs/* --output-dir runs/scene_patch_dataset
+    --crop-size 256 --canonical-mode object_centered
+
+synthetic_masks:
+  modes:
+    - projected_sam_component
+    - depth_consistent_ellipsoid
+    - colmap_space_cuboid
+    - random_latent_blob
+  dilate_pixels_range: [2, 12]
+  latent_dilate_cells_range: [1, 4]
+  include_shadow_ring: true
+
+artifacts_per_sample:
+  - rgb_crops
+  - normal_crops
+  - coord_crops
+  - depth_crops
+  - source_latent
+  - masked_latent
+  - latent_mask
+  - input_camera_arrays
+  - heldout_camera_arrays
+  - heldout_rgb_alpha_depth_targets
+
+teacher_targets:
+  command: >-
+    python tools/generate_patch_teacher_targets.py
+    --patch-dataset runs/scene_patch_dataset/scene_patch_dataset.json
+    --output-dir runs/scene_patch_teacher_targets
+    --input-views 4 --heldout-views 4
+
+model:
+  init_from: checkpoints/diffsplat/gsdiff_gobj83k_pas_fp16__render
+  gsvae_weights: checkpoints/diffsplat/gsvae_gobj265k_sdxl_fp16
+  freeze_gsvae: true
+  freeze_unmasked_latents_during_sampling: true
+
+losses:
+  diffusion_min_snr_gamma: 5.0
+  masked_latent_weight: 1.0
+  unmasked_preservation_weight: 10.0
+  heldout_rgb_render_weight: 1.0
+  heldout_alpha_weight: 0.2
+  heldout_depth_weight: 0.1
+  opacity_sparsity_weight: 0.01
+
+training_commands:
+  recon_adapter: >-
+    python tools/train_recon_adapter.py
+    --teacher-targets runs/scene_patch_teacher_targets/teacher_targets.json
+    --output-dir runs/recon_adapter_smoke
+  recon_gates: >-
+    python tools/evaluate_recon_gates.py
+    --teacher-targets runs/scene_patch_teacher_targets/teacher_targets.json
+    --recon-train-status runs/recon_adapter_smoke/train_recon_adapter_status.json
+    --output-dir runs/recon_gates
+  latent_denoiser: >-
+    python tools/train_masked_latent_denoiser.py
+    --dataset-manifest runs/native_latent_training/dataset_manifest.json
+    --output-dir runs/masked_latent_denoiser
+  merge_local_inpaint: >-
+    python tools/merge_local_inpaint.py
+    --full-gaussian-npz runs/bag/gsrecon/gaussians.npz
+    --local-gaussian-npz runs/local_patch_inpaint/decoded_gaussians.npz
+    --deletion-mask runs/bag/void/deletion_mask.npy
+    --output-npz runs/bag/inpaint/merged_gaussians.npz
+
+hpc:
+  account: msml612pcs3-class
+  partition: gpu-h100
+  gres: gpu:h100:1
+  time: "08:00:00"
+  cpus_per_task: 12
+  mem: 96G
+  batch_size: 1
+  gradient_accumulation_steps: 8
+  mixed_precision: fp16

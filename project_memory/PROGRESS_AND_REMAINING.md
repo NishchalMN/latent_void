@@ -1,6 +1,6 @@
 # Progress And Remaining Work
 
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 ## Goal
 
@@ -18,6 +18,12 @@ scenes. The target flow is:
 
 ## What We Built
 
+- Implemented the native DiffSplat latent inpainting plan as concrete repo
+  contracts:
+  - staged render diagnosis with `tools/diagnose_diffsplat_render.py`
+  - DiffSplat-style geometry preprocessing profile in the active configs
+  - local object/void crop manifest extraction with adjusted intrinsics
+  - H100 training-data and masked latent denoiser specifications
 - Initialized `latent_void` as a standalone Git repo.
 - Set up GitHub sync:
   - local repo: `/fs/nexus-scratch/gnanesh/DiffSplat/latent_void`
@@ -125,33 +131,72 @@ The first end-to-end MVP run completed on Zaratan H100:
 - The pipeline can process one real Inpaint360GS scene end to end through:
   geometry -> GSRecon/GSVAE -> SAM 3 -> 3D void -> fallback latent fill ->
   before/after renders.
+- From the direct Zaratan checkout, the active config now uses repo-relative
+  paths and validates with `--strict-paths`.
+- The `bag` source RGB views and SAM 3 mask overlays are visually correct. The
+  useful current review image is
+  `runs/visual_inspection/inpaint360gs_bag_input_masks_void_preview.png`.
+- The pipeline now has an external native latent context-inpaint command at
+  `tools/inpaint_latent_context.py`. It keeps unmasked latents fixed and fills
+  only the masked void cells, so the Zaratan config no longer relies on the
+  internal fallback branch.
+- Mask fusion now has configurable score, component-size, erosion, and dilation
+  controls, and records those settings in `void_manifest.json`.
+- Additional scenes were validated at the dataset and dry-run command-contract
+  level: `car` and `garden_toys`.
 - All current local unit tests pass:
-  - 20 tests total
-  - 2 skipped locally due missing Pillow in the local environment
+  - 23 tests total
 
 ## What Is Left
 
-### 1. Replace Fallback Inpaint With Real Latent Inpainting
+### 1. Improve Local Patch Reconstruction
 
-The current fallback inpaint proves plumbing, not final quality. The main
-remaining research/implementation work is to add a real masked latent denoising
-or optimization module that:
+`tools/diagnose_diffsplat_render.py` has now been run on both the existing full
+`bag` artifacts and a mask-centered local patch artifact. The results separate:
 
-- keeps unmasked latents/Gaussians fixed
-- updates only the latent void region
-- uses scene/context conditioning
-- optionally injects attention from the original scene when compatible
-- decodes to artifact-free Gaussian content
+- GSRecon/direct Gaussian grid failure
+- GSVAE reconstruction failure
+- edited latent failure
 
-### 2. Add Self-Supervised Fine-Tuning
+The finding is that full-scene reconstruction is already degraded before
+inpainting, while the local patch path is more coherent but still blurry/warped.
+Local 3D canonicalization and GObjaverse-style white outside-mask compositing
+have now been implemented and tested. The best current variant is the
+object-centered white-background patch, but it is still too sparse/blurry for
+final results.
 
-If pretrained latent behavior is insufficient, add H100 training:
+The known-good object sample route is now complete. We downloaded the official
+GObjaverse example archive, prepared it with `tools/prepare_gobjaverse_sample.py`,
+and ran the same GSRecon/GSVAE diagnostic path on H100. The official car sample
+renders recognizably, so the DiffSplat install/checkpoints/renderer path is
+healthy on in-domain object data.
 
-- use DL3DV-10K and/or configured scene datasets
-- create random object-like 3D masks
-- reconstruct the known intact scene
-- optimize masked latent reconstruction
-- add render consistency, opacity, depth, and artifact cleanup losses
+The next engineering step is no longer more harmonic inpainting or environment
+debugging. It is adapting GSRecon/GSVAE or the local patch representation to real
+scene patches using the training contract in `configs/native_latent_training_example.yaml`.
+The local adaptation mechanics are executable: a 32-sample masked-latent dataset
+was generated from the best current `bag` patch, and a tiny H100 smoke trainer
+reduced masked latent MSE from `2.1880` to `0.5790`. This validates the
+data/optimization loop, not final visual quality.
+
+### 2. Replace Baseline Inpaint With A Learned Latent Denoiser
+
+The fallback branch has been replaced in the active Zaratan config by a
+context-only latent inpainting command. This proves the external inpaint contract
+and enforces unmasked-latent invariance, but it is still not the final
+research-quality model. The H100 training contract now lives in
+`docs/NATIVE_DIFFSPLAT_LATENT_INPAINTING.md` and
+`configs/native_latent_training_example.yaml`.
+
+The learned denoiser must keep unmasked latents/Gaussians fixed, update only the
+latent void region, use scene/camera context, and optimize masked latent plus
+held-out render consistency losses. The current smoke trainer should be replaced
+with a DiffSplat/PixArt/GSDiff initialized masked denoiser once the reconstruction
+target quality is sufficient.
+
+Patch latent void/inpaint was run on the best current patch diagnostic, but it
+is not yet meaningful as a final result because patch reconstruction remains the
+dominant visual failure.
 
 ### 3. Improve 3D Void Quality
 
@@ -166,7 +211,11 @@ Current Gaussian deletion uses projected mask voting. It should be improved with
 
 ### 4. Evaluate Visual Quality
 
-We still need systematic quality checks:
+We still need systematic quality checks. The immediate finding is that current
+DiffSplat/GSVAE render diagnostics for `bag` are not visually interpretable,
+even though the input views and SAM masks are sensible. Before evaluating
+inpainting quality, fix the reconstruction/render path so before renders look
+like the scene.
 
 - inspect before/after render grids
 - generate comparison videos
@@ -200,5 +249,7 @@ The infrastructure and first H100 end-to-end MVP are working. The project is no
 longer blocked on dataset loading, SAM 3 access, GSRecon input channels,
 DiffSplat compatibility, or Zaratan execution.
 
-The main unfinished part is the actual high-quality native latent inpainting
-model. Everything around it is now in place enough to support that work.
+The main unfinished part is still the high-quality native latent inpainting
+model, but the latest H100 diagnostics show that learned local-patch
+reconstruction/adaptation is also needed before the inpaint quality can be
+fairly judged.

@@ -1,6 +1,156 @@
 # Status
 
-Last updated: 2026-05-02
+Last updated: 2026-05-03
+
+## 2026-05-03 Direct Zaratan Update
+
+- Implemented the Scene-Local DiffSplat Training Plan scaffolding without
+  editing the Cursor plan file:
+  - `tools/build_scene_patch_dataset.py` builds multi-scene local patch datasets
+    from existing geometry/mask runs and records input/held-out patch view IDs.
+  - `latent_void.datasets.DL3DVDataset` and `dataset_from_config` add
+    DL3DV-style calibrated scene discovery for the larger reconstruction
+    adaptation source.
+  - `tools/generate_patch_teacher_targets.py` creates held-out RGB/alpha/depth
+    teacher target manifests from local patch manifests.
+  - `tools/train_recon_adapter.py` provides a runnable reconstruction-adapter
+    smoke trainer with RGB, alpha, and depth losses while keeping GSVAE frozen by
+    contract.
+  - `tools/evaluate_recon_gates.py` records direct-GS-grid versus GSVAE
+    reconstruction diagnostic metrics and early adapter-loss gates.
+  - `tools/train_masked_latent_denoiser.py` replaces the tiny smoke trainer for
+    the real inpainting path with a residual masked latent denoiser that clamps
+    unmasked cells.
+  - `tools/merge_local_inpaint.py` merges decoded local inpainted Gaussians into
+    a full scene after deletion/visibility/opacity filtering.
+- `configs/native_latent_training_example.yaml` now includes example commands
+  for the patch builder, teacher targets, recon adapter, gates, masked denoiser,
+  and local merge stages.
+- Downloaded the official GObjaverse `render_data_examples.zip` archive and ran
+  a true in-domain DiffSplat sanity check. Added
+  `tools/prepare_gobjaverse_sample.py`, which mirrors DiffSplat's GObjaverse
+  loader conventions for RGBA compositing, EXR normal/depth loading, fixed
+  intrinsics, camera normalization, normal normalization, and coordinate
+  encoding. The H100 GSRecon/GSVAE sanity run succeeded:
+  - input sheet: `runs/visual_inspection/gobjaverse_official_example_inputs.png`
+  - export: `runs/visual_inspection/gobjaverse_official_example_gsrecon/`
+  - render sheet: `runs/visual_inspection/gobjaverse_official_example_render_diagnostics_sheet.png`
+  The official car renders are recognizable in both direct GS grid and GSVAE
+  reconstruction branches. This confirms the DiffSplat install, checkpoints, and
+  renderer path are basically healthy; the unusable `bag` outputs are due to
+  real-scene/local-patch domain mismatch and adapter/input quality, not a broken
+  H100 environment.
+- Added executable native latent adaptation scaffolding:
+  - `tools/generate_native_latent_training_data.py` creates self-supervised
+    masked latent samples from a local patch `latent.npy`, patch manifest, and
+    synthetic/patch masks.
+  - `tools/train_masked_latent_smoke.py` runs a tiny masked latent reconstruction
+    model to verify sample shapes and H100 optimization mechanics.
+- Generated 32 smoke training samples from the current best `bag` local patch:
+  `runs/visual_inspection/native_latent_training_smoke/dataset_manifest.json`.
+  Ran a 200-step H100 smoke train in tmux session `0`; masked latent MSE dropped
+  from `2.1880` to `0.5790`.
+  Loss plot: `runs/visual_inspection/native_latent_training_smoke/h100_smoke_loss.png`.
+  This proves the adaptation loop is executable, but it is not the final model.
+- Added and tested local 3D canonicalization for patch manifests. The extractor
+  can now compute a mask-centered transform from finite raw coordinate points,
+  rewrite camera poses and coordinate maps, and composite RGB/normal/coord
+  channels to white outside the object mask to better match DiffSplat's
+  GObjaverse loader.
+- H100 patch reconstruction follow-up:
+  - First object-centered canonicalization without white masking worsened the
+    render.
+  - First-view canonicalization mapped the reference camera to `[I | z=1.4]` but
+    clipped the coordinate channel heavily for this scene and also rendered
+    poorly.
+  - Object-centered canonicalization plus white outside-mask compositing produced
+    the most object-like result so far:
+    `runs/visual_inspection/inpaint360gs_bag_srun_h100_local_patch_object_centered_white_render_diagnostics_sheet.png`.
+    It is still too blurry/sparse for final quality.
+- Ran local patch latent void/inpaint on the object-centered white-background
+  patch as a diagnostic:
+  - `runs/visual_inspection/inpaint360gs_bag_srun_h100_local_patch_object_centered_white_inpaint/`
+  - `runs/visual_inspection/inpaint360gs_bag_srun_h100_local_patch_object_centered_white_inpaint_render_diagnostics_sheet.png`
+  It deleted 13,771 patch Gaussians and filled 1,421 latent cells. The edited
+  latent removes most of the already-weak object signal, confirming again that
+  reconstruction/adaptation must improve before inpainting quality can be judged.
+- Ran the new staged render diagnosis on the existing H100 `bag` artifacts from
+  tmux session `0` on `gpu-a6-4`. Outputs:
+  - `runs/visual_inspection/inpaint360gs_bag_srun_h100_render_diagnostics/`
+  - `runs/visual_inspection/inpaint360gs_bag_srun_h100_staged_render_diagnostics.png`
+  The direct `gs_grid.npy` render is already noisy/floatery, the GSVAE
+  reconstruction is similarly degraded, and the edited latent mainly adds a
+  localized blue fill. This confirms the blocker is upstream of the inpaint
+  method: GSRecon/GSVAE reconstruction quality on the full scene is not yet
+  reliable enough for judging inpainting.
+- Extracted local mask-centered bag patches and ran GSRecon/GSVAE plus staged
+  render diagnosis on H100:
+  - `runs/visual_inspection/inpaint360gs_bag_srun_h100_local_patch_inputs.png`
+  - `runs/visual_inspection/inpaint360gs_bag_srun_h100_local_patch_gsrecon/`
+  - `runs/visual_inspection/inpaint360gs_bag_srun_h100_local_patch_render_diagnostics/`
+  - `runs/visual_inspection/inpaint360gs_bag_srun_h100_local_patch_render_diagnostics_sheet.png`
+  The local patch path is more centered and coherent than the full scene, but
+  still soft/warped. This makes local patches the right debugging/training
+  surface, while also showing that convention fixes alone are unlikely to be
+  sufficient for final quality.
+- Implemented the native latent inpainting follow-up plan without modifying the
+  Cursor plan file:
+  - `tools/diagnose_diffsplat_render.py` separates direct GS grid renders,
+    decoded original latent renders, and decoded edited latent renders.
+  - Geometry preprocessing now records a DiffSplat GObjaverse-style profile and
+    supports alpha-to-white compositing plus configurable first-view camera
+    canonicalization. The example and Zaratan configs now use
+    `coord_mode: diffsplat`.
+  - `tools/extract_local_patch_manifest.py` writes local object/void crop
+    manifests with adjusted crop intrinsics for patch-scale GSRecon/GSVAE runs.
+  - `docs/NATIVE_DIFFSPLAT_LATENT_INPAINTING.md` and
+    `configs/native_latent_training_example.yaml` define the H100 training data
+    generation contract and masked latent denoiser objective.
+- Work is now being done directly in the Zaratan checkout at
+  `/scratch/zt1/project/msml612pcs3/user/gnanesh/latent_void`; tmux remains useful
+  for keeping the attached H100 shell alive, but it is not required by the
+  project tooling.
+- `configs/zaratan_inpaint360gs_bag.yaml` now uses repo-relative paths
+  (`data/`, `external/`, `checkpoints/`, `runs/`) so it works from the current
+  checkout instead of the older `/home/gnanesh/...` path.
+- The completed H100 `bag` run was inspected more carefully. The source geometry
+  RGB views and SAM 3 masks are visually sensible; the previous GSVAE render
+  sheets are not useful for human progress review. Treat that as a
+  reconstruction/render-adapter quality issue, not a SAM prompt issue.
+- Useful visual diagnostics were written under `runs/visual_inspection/`:
+  - `inpaint360gs_bag_input_masks_void_preview.png`
+  - `car_source_views.png`
+  - `garden_toys_source_views.png`
+  - older GSVAE render sheets remain there for record, but they are not a good
+    visual progress signal.
+- Added `tools/inpaint_latent_context.py`, a first external native latent
+  inpainting backend. It performs context-only harmonic/Jacobi fill over masked
+  latent cells and checks that unmasked latent cells remain fixed. This replaces
+  the pipeline fallback branch for the Zaratan config, but it is still a baseline
+  rather than the final learned denoiser.
+- Regenerated the existing `bag` void and inpaint outputs through the configured
+  external command:
+  - `void/void_manifest.json` still reports 1,701 deleted Gaussians.
+  - `inpaint/context_inpaint_status.json` reports 70 masked latent cells and 128
+    context-fill iterations.
+- Added mask quality controls before fusion:
+  `pipeline.mask_score_threshold`, `mask_min_area`, `mask_max_area_fraction`,
+  `mask_erode_pixels`, and `mask_dilate_pixels`. The void manifest records these
+  cleanup settings.
+- Added a DiffSplat compatibility stub for optional `ImageReward` imports, which
+  avoids loading the unused `datasets` metric stack during render/model imports.
+- Validation passed:
+  - `python -m unittest discover -s tests` -> 23 tests passed.
+  - `python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml --strict-paths`
+  - dry-run staged pipelines for `bag`, `car`, and `garden_toys` with 4 views.
+
+Current blocker:
+
+- The pipeline can create masks, voids, and latent edits, but the current
+  DiffSplat/GSVAE render output for the real `bag` scene is not visually
+  interpretable. Before judging inpainting quality, fix or replace the
+  GSRecon/GSVAE scene reconstruction/render path so before renders resemble the
+  input scene.
 
 ## What Works
 

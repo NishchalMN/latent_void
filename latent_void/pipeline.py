@@ -1,7 +1,8 @@
 import os
+import json
 
 from latent_void.config import get_nested, validate_config
-from latent_void.datasets import Inpaint360GSDataset
+from latent_void.datasets import dataset_from_config
 from latent_void.external import run_command
 from latent_void.io import ensure_dir, write_json
 
@@ -18,10 +19,6 @@ def run_dirs(config):
         "inpaint": ensure_dir(os.path.join(output_dir, "inpaint")),
         "renders": ensure_dir(os.path.join(output_dir, "renders")),
     }
-
-
-def dataset_from_config(config):
-    return Inpaint360GSDataset(config)
 
 
 def validate(config, strict_paths=False):
@@ -109,7 +106,7 @@ def fuse_void(config):
     from latent_void.gaussians import delete_gaussians, load_gaussian_npz, require_projection_arrays, save_gaussian_npz
     from latent_void.io import save_array
     from latent_void.latent import latent_mask_from_gaussian_mask
-    from latent_void.masks import fuse_gaussian_masks, load_masks_from_dir
+    from latent_void.masks import clean_binary_mask, fuse_gaussian_masks, load_masks_from_dir
 
     dirs = run_dirs(config)
     gaussian_npz = _resolve_gaussian_npz(config)
@@ -118,6 +115,35 @@ def fuse_void(config):
     mask_paths, masks = load_masks_from_dir(dirs["masks"])
     if not masks:
         raise RuntimeError("no SAM/provided masks found in %s" % dirs["masks"])
+    score_threshold = float(get_nested(config, "pipeline.mask_score_threshold", 0.0) or 0.0)
+    if score_threshold > 0.0:
+        scores_path = os.path.join(dirs["masks"], "sam3_results.json")
+        if os.path.exists(scores_path):
+            with open(scores_path, "r") as handle:
+                sam3_results = json.load(handle)
+            scores = {
+                os.path.basename(item.get("mask_path", "")): float(item.get("score", 0.0))
+                for item in sam3_results.get("results", [])
+            }
+            filtered = [
+                (path, mask)
+                for path, mask in zip(mask_paths, masks)
+                if scores.get(os.path.basename(path), 1.0) >= score_threshold
+            ]
+            mask_paths = [item[0] for item in filtered]
+            masks = [item[1] for item in filtered]
+            if not masks:
+                raise RuntimeError("all masks were filtered by pipeline.mask_score_threshold")
+    masks = [
+        clean_binary_mask(
+            mask,
+            min_area=int(get_nested(config, "pipeline.mask_min_area", 0) or 0),
+            max_area_fraction=float(get_nested(config, "pipeline.mask_max_area_fraction", 1.0) or 1.0),
+            erode_pixels=int(get_nested(config, "pipeline.mask_erode_pixels", 0) or 0),
+            dilate_pixels=int(get_nested(config, "pipeline.mask_dilate_pixels", 0) or 0),
+        )
+        for mask in masks
+    ]
     if len(masks) > uvs.shape[0]:
         masks = masks[:uvs.shape[0]]
         mask_paths = mask_paths[:uvs.shape[0]]
@@ -146,6 +172,13 @@ def fuse_void(config):
     manifest = {
         "gaussian_npz": gaussian_npz,
         "mask_paths": mask_paths,
+        "mask_cleanup": {
+            "score_threshold": score_threshold,
+            "min_area": int(get_nested(config, "pipeline.mask_min_area", 0) or 0),
+            "max_area_fraction": float(get_nested(config, "pipeline.mask_max_area_fraction", 1.0) or 1.0),
+            "erode_pixels": int(get_nested(config, "pipeline.mask_erode_pixels", 0) or 0),
+            "dilate_pixels": int(get_nested(config, "pipeline.mask_dilate_pixels", 0) or 0),
+        },
         "num_deleted_gaussians": int(deletion.sum()),
         "num_gaussians": int(deletion.shape[0]),
         "latent_mask_shape": list(latent_mask.shape),
@@ -171,6 +204,7 @@ def run_latent_inpaint(config, dry_run=False):
             "output_path": output_path,
             "inpaint_dir": dirs["inpaint"],
             "latent_inpaint_weights": get_nested(config, "checkpoints.latent_inpaint_weights", ""),
+            "latent_inpaint_iterations": int(get_nested(config, "pipeline.latent_inpaint_iterations", 128) or 128),
         }
         result = run_command(command, values, dry_run=dry_run)
         write_json(os.path.join(dirs["inpaint"], "latent_inpaint_command.json"), result)

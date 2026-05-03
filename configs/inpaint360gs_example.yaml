@@ -30,6 +30,8 @@ checkpoints:
 geometry:
   input_res: 256
   device: cuda
+  preprocessing_profile: diffsplat_gobjaverse
+  white_background: true
   depth_model: ${MARIGOLD_DEPTH_MODEL:-prs-eth/marigold-depth-v1-1}
   normal_model: ${MARIGOLD_NORMAL_MODEL:-prs-eth/marigold-normals-v1-1}
   num_inference_steps: 4
@@ -37,16 +39,23 @@ geometry:
   depth_scale: 5.0
   normalize_cameras: true
   camera_norm_radius: 1.4
-  coord_mode: scene_minmax
+  camera_reference_index: 0
+  coord_mode: diffsplat
 
 pipeline:
   max_views: 16
   mask_threshold: 0.55
+  mask_score_threshold: 0.0
+  mask_min_area: 0
+  mask_max_area_fraction: 1.0
+  mask_erode_pixels: 0
+  mask_dilate_pixels: 0
   latent_downsample: 8
+  latent_inpaint_iterations: 128
   gaussian_npz: ${GAUSSIAN_NPZ:-}
   latent_npy: ${LATENT_NPY:-}
   mask_source: auto
-  allow_fallback_inpaint: true
+  allow_fallback_inpaint: false
 
 external:
   geometry_command: ""
@@ -66,7 +75,12 @@ external:
     --prompt "{prompt}"
     --output-dir {mask_dir}
     --resize-to {mask_resize}
-  latent_inpaint_command: ""
+  latent_inpaint_command: >-
+    python tools/inpaint_latent_context.py
+    --latent-path {latent_path}
+    --mask-path {mask_path}
+    --output-path {output_path}
+    --iterations {latent_inpaint_iterations}
   render_command: >-
     python tools/render_latent_scene.py
     --diffsplat-root {diffsplat_root}

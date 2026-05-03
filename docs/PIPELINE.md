@@ -34,10 +34,12 @@ Configured by `external.geometry_command`. It generates:
 - normalized coordinate maps for GSRecon
 - `geometry_manifest.json`
 
-The default Zaratan config keeps coordinate values in a scene min/max encoding
-and records the camera normalization transform in the manifest. A
-`geometry.coord_mode: diffsplat` option is available for the stricter
-`coord * 0.5 + 0.5` encoding used by the original GObjaverse path.
+The default Zaratan config now follows the stricter DiffSplat-style profile:
+RGB is composited over white when alpha exists, camera normalization uses the
+first selected view as the canonical reference, and coordinate maps use
+`geometry.coord_mode: diffsplat` (`coord * 0.5 + 0.5`). The geometry manifest
+records these preprocessing choices so reconstruction runs can be compared
+against the original GObjaverse contract.
 
 The current public DiffSplat GSRecon/GSVAE options concatenate RGB, normal, and
 coordinate maps as model inputs; Marigold depth is saved and used to compute the
@@ -106,6 +108,17 @@ Configured by `external.latent_inpaint_command`. If omitted and
 cells with unmasked channel means. That fallback is for plumbing tests only, not
 the final research-quality model.
 
+The active Zaratan config uses `tools/inpaint_latent_context.py` as the first
+external native latent baseline. It performs a context-only harmonic fill inside
+the latent void and asserts that unmasked latent cells remain unchanged. This is
+better than the internal fallback branch because it exercises the external stage
+contract, but it is still a baseline rather than the final learned denoiser.
+
+Mask fusion can be tuned with `pipeline.mask_score_threshold`,
+`pipeline.mask_min_area`, `pipeline.mask_max_area_fraction`,
+`pipeline.mask_erode_pixels`, and `pipeline.mask_dilate_pixels`; these cleanup
+settings are recorded in `void_manifest.json`.
+
 ### Render Diagnostics
 
 Configured by `external.render_command`. The local `tools/render_latent_scene.py`
@@ -114,6 +127,58 @@ renders RGB, alpha, and depth diagnostics through DiffSplat's renderer. It can
 render both the original `latent.npy` and the inpainted
 `latent_inpainted.npy`, producing `before/` and `after/` directories under the
 run's render folder.
+
+For reconstruction debugging, use `tools/diagnose_diffsplat_render.py`. It
+renders direct `gs_grid.npy`, decoded original `latent.npy`, and decoded edited
+latent outputs into separate folders so failures can be assigned to GSRecon,
+GSVAE reconstruction, or latent editing.
+
+`tools/prepare_gobjaverse_sample.py` prepares the official GObjaverse
+`render_data_examples.zip` object for the same GSRecon adapter. It mirrors
+DiffSplat's GObjaverse loader conventions and is the preferred sanity check for
+whether the installed checkpoints and renderer work on in-domain object data.
+
+### Local Patch Path
+
+`tools/extract_local_patch_manifest.py` creates a local object-scale input
+surface from `geometry_manifest.json` plus the SAM mask directory. It crops RGB,
+normal, coordinate, depth, and mask arrays around the target object, resizes them
+to the DiffSplat input size, and rewrites intrinsics into crop coordinates. It
+can also transform raw coordinate maps and camera poses into a local
+mask-centered canonical frame with `--canonicalize-3d`, and it composites RGB,
+normal, and encoded coordinate channels to white outside the object mask by
+default to better match DiffSplat's GObjaverse loader.
+
+The resulting `local_patch_manifest.json` can be passed to the GSRecon exporter
+to avoid feeding the full unbounded Inpaint360GS scene into an object-centric
+DiffSplat model. Current H100 diagnostics show this is a better debugging
+surface than the full scene, but not yet a final-quality reconstruction path.
+
+The native latent training design and H100 data-generation contract live in
+`docs/NATIVE_DIFFSPLAT_LATENT_INPAINTING.md`; the corresponding template config
+is `configs/native_latent_training_example.yaml`.
+
+The scene-local training path is now split into explicit tools:
+
+- `tools/build_scene_patch_dataset.py` discovers existing geometry/mask runs and
+  creates a multi-scene dataset of local patch manifests.
+- `latent_void.datasets.DL3DVDataset` adds DL3DV-style calibrated scene discovery
+  through the same view interface used by Inpaint360GS.
+- `tools/generate_patch_teacher_targets.py` writes input/held-out patch splits
+  with RGB, alpha, depth, normal, coord, camera, and intrinsics references.
+- `tools/train_recon_adapter.py` runs the first reconstruction-adapter smoke
+  loop with RGB/alpha/depth consistency losses while keeping GSVAE frozen by
+  contract.
+- `tools/evaluate_recon_gates.py` compares direct GS grid diagnostics against
+  GSVAE reconstruction diagnostics and records pass/fail gates.
+- `tools/generate_native_latent_training_data.py` packages local patch latents
+  into self-supervised masked latent samples, and
+  `tools/train_masked_latent_denoiser.py` trains a residual masked latent denoiser
+  with hard unmasked-cell clamping and optional compatible checkpoint
+  initialization.
+- `tools/merge_local_inpaint.py` removes or suppresses deleted full-scene
+  Gaussians and appends finite, visible decoded local inpainted Gaussians for
+  final render diagnostics.
 
 ## Zaratan
 

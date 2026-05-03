@@ -64,6 +64,65 @@ def load_masks_from_dir(mask_dir):
     return paths, [load_mask(path) for path in paths]
 
 
+def _binary_morph(mask, radius, op):
+    import numpy as np
+
+    radius = int(radius)
+    if radius <= 0:
+        return np.asarray(mask).astype(bool)
+    result = np.asarray(mask).astype(bool)
+    for _ in range(radius):
+        padded = np.pad(result, 1, mode="constant", constant_values=(op == "erode"))
+        neighborhoods = [
+            padded[dy:dy + result.shape[0], dx:dx + result.shape[1]]
+            for dy in range(3)
+            for dx in range(3)
+        ]
+        stack = np.stack(neighborhoods, axis=0)
+        result = stack.all(axis=0) if op == "erode" else stack.any(axis=0)
+    return result
+
+
+def _component_filter(mask, min_area=0, max_area_fraction=1.0):
+    import numpy as np
+
+    mask = np.asarray(mask).astype(bool)
+    min_area = int(min_area or 0)
+    max_area = int(float(max_area_fraction) * mask.size)
+    if min_area <= 1 and max_area >= mask.size:
+        return mask
+    keep = np.zeros(mask.shape, dtype=bool)
+    visited = np.zeros(mask.shape, dtype=bool)
+    height, width = mask.shape
+    for start_y, start_x in np.argwhere(mask):
+        if visited[start_y, start_x]:
+            continue
+        stack = [(int(start_y), int(start_x))]
+        component = []
+        visited[start_y, start_x] = True
+        while stack:
+            y, x = stack.pop()
+            component.append((y, x))
+            for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if ny < 0 or nx < 0 or ny >= height or nx >= width:
+                    continue
+                if mask[ny, nx] and not visited[ny, nx]:
+                    visited[ny, nx] = True
+                    stack.append((ny, nx))
+        area = len(component)
+        if area >= min_area and area <= max_area:
+            for y, x in component:
+                keep[y, x] = True
+    return keep
+
+
+def clean_binary_mask(mask, min_area=0, max_area_fraction=1.0, erode_pixels=0, dilate_pixels=0):
+    cleaned = _component_filter(mask, min_area=min_area, max_area_fraction=max_area_fraction)
+    cleaned = _binary_morph(cleaned, erode_pixels, "erode")
+    cleaned = _binary_morph(cleaned, dilate_pixels, "dilate")
+    return cleaned
+
+
 def sample_mask(mask, uv):
     h, w = mask.shape[:2]
     x = int(round(float(uv[0])))

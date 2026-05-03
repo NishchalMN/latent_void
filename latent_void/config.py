@@ -69,8 +69,8 @@ def validate_config(config, strict_paths=False):
     if missing:
         raise ConfigError("missing required config keys: " + ", ".join(missing))
 
-    if get_nested(config, "dataset.type") != "inpaint360gs":
-        raise ConfigError("only dataset.type=inpaint360gs is implemented")
+    if get_nested(config, "dataset.type") not in ("inpaint360gs", "dl3dv"):
+        raise ConfigError("dataset.type must be inpaint360gs or dl3dv")
 
     threshold = float(get_nested(config, "pipeline.mask_threshold"))
     if threshold <= 0.0 or threshold > 1.0:

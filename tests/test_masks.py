@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from latent_void.masks import fuse_gaussian_masks, shadow_offset
+from latent_void.masks import clean_binary_mask, fuse_gaussian_masks, shadow_offset
 
 
 class MaskTests(unittest.TestCase):
@@ -32,6 +32,14 @@ class MaskTests(unittest.TestCase):
         shadow[2, 3] = True
         offset = shadow_offset(obj, shadow)
         self.assertTrue(np.allclose(offset, np.array([2.0, 1.0], dtype=np.float32)))
+
+    def test_clean_binary_mask_filters_small_components_and_dilates(self):
+        mask = np.zeros((5, 5), dtype=bool)
+        mask[1:3, 1:3] = True
+        mask[4, 4] = True
+        cleaned = clean_binary_mask(mask, min_area=2, dilate_pixels=1)
+        self.assertFalse(cleaned[4, 4])
+        self.assertTrue(cleaned[0, 1])
 
     def test_resize_mask_uses_nearest_binary_values(self):
         try:

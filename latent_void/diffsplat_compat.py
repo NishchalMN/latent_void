@@ -78,6 +78,20 @@ def patch_optional_imports():
         wandb.run = None
         sys.modules["wandb"] = wandb
 
+    if "ImageReward" not in sys.modules:
+        image_reward = types.ModuleType("ImageReward")
+        image_reward.__spec__ = importlib.machinery.ModuleSpec("ImageReward", loader=None)
+
+        class _NoopImageRewardModel(object):
+            def score(self, *args, **kwargs):
+                return 0.0
+
+        def load(*args, **kwargs):
+            return _NoopImageRewardModel()
+
+        image_reward.load = load
+        sys.modules["ImageReward"] = image_reward
+
 
 def patch_diffusers_model_paths(sdxl_vae_path="", tiny_vae_path=""):
     sdxl_vae_path, tiny_vae_path = resolve_aux_model_paths(sdxl_vae_path, tiny_vae_path)
