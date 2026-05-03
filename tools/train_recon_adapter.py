@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument("--rgb-weight", type=float, default=1.0)
     parser.add_argument("--alpha-weight", type=float, default=0.2)
     parser.add_argument("--depth-weight", type=float, default=0.2)
+    parser.add_argument("--log-interval", type=int, default=100)
     return parser.parse_args()
 
 
@@ -136,6 +137,11 @@ def main():
             "alpha_loss": float(alpha_loss.detach().cpu()),
             "depth_loss": float(depth_loss.detach().cpu()),
         })
+        if args.log_interval > 0 and ((step + 1) % int(args.log_interval) == 0 or step == 0):
+            latest = dict(losses[-1])
+            latest["step"] = step + 1
+            latest["steps"] = int(args.steps)
+            print(json.dumps(latest), flush=True)
     ensure_dir(args.output_dir)
     model_path = os.path.join(args.output_dir, "recon_adapter_smoke.pt")
     torch.save({

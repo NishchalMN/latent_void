@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument("--noise-min", type=float, default=0.02)
     parser.add_argument("--noise-max", type=float, default=0.5)
     parser.add_argument("--init-checkpoint", default="")
+    parser.add_argument("--log-interval", type=int, default=100)
     return parser.parse_args()
 
 
@@ -147,6 +148,16 @@ def main():
         loss.backward()
         optimizer.step()
         losses.append({"step": step, "loss": float(loss.detach().cpu()), "context_error": float(context_error.detach().cpu())})
+        if args.log_interval > 0 and ((step + 1) % int(args.log_interval) == 0 or step == 0):
+            print(
+                json.dumps({
+                    "step": step + 1,
+                    "steps": int(args.steps),
+                    "loss": losses[-1]["loss"],
+                    "context_error": losses[-1]["context_error"],
+                }),
+                flush=True,
+            )
     ensure_dir(args.output_dir)
     model_path = os.path.join(args.output_dir, "masked_latent_denoiser.pt")
     torch.save({
