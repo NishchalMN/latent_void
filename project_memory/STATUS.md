@@ -71,6 +71,37 @@ Last updated: 2026-05-03
   targets, and trains a `10000`-step multi-scene reconstruction adapter. `car`
   geometry and SAM segmentation completed successfully before moving on to
   `cube`.
+- Follow-up audit after the H100 allocation ended:
+  - The tmux session is back on the login node; the old `gpu-a6-4` connection
+    closed after the run completed.
+  - All queued multi-scene geometry and SAM stages completed successfully for
+    the 10 added Inpaint360GS scenes.
+  - `runs/scene_patch_training_long/multiscene_patch_dataset/scene_patch_dataset.json`
+    contains `11` samples and `0` failures: the original `bag` run plus `car`,
+    `cone_red`, `cone_yellow`, `cube`, `doppelherz`, `fruits`, `garden_toys`,
+    `redbull`, `toys`, and `truck`.
+  - `runs/scene_patch_training_long/multiscene_teacher_targets/teacher_targets.json`
+    contains `11` samples, `0` failures, and `44` held-out target pairs.
+  - Multi-scene recon adapter training completed:
+    `runs/scene_patch_training_long/recon_adapter_multiscene_10k/train_recon_adapter_status.json`.
+    It trained for `10000` CUDA steps over `44` pairs; loss improved from
+    `0.3321922123` to `0.0440353006`.
+  - Multi-scene recon gate report:
+    `runs/scene_patch_training_long/recon_gates_multiscene/recon_gate_report.json`.
+    The early adapter-loss gate passed, but direct-GS-grid vs GSVAE diagnostic
+    pairs are still absent for this adapted model.
+  - Held-out synthetic-mask denoiser inference evaluation:
+    `runs/scene_patch_training_long/masked_latent_denoiser_20k_eval/eval_metrics.json`.
+    On `256` newly generated masks, mean masked MSE was `0.0003028519`, median
+    masked MSE was `0.0002251347`, max masked MSE was `0.0043224539`, and mean
+    context error remained `0.0`.
+  - Multi-scene recon-adapter inference evaluation:
+    `runs/scene_patch_training_long/recon_adapter_multiscene_10k_eval/eval_metrics.json`.
+    Across `44` target pairs, mean weighted loss was `0.0480843608`, mean RGB
+    MSE was `0.0165630163`, mean alpha MSE was `0.0400669282`, and mean depth
+    L1 was `0.1175397943`.
+  - Slurm currently shows pending user jobs on `gpu-a100` and `gpu-h100` due to
+    priority; no active attached H100 is available in tmux right now.
 - Downloaded the official GObjaverse `render_data_examples.zip` archive and ran
   a true in-domain DiffSplat sanity check. Added
   `tools/prepare_gobjaverse_sample.py`, which mirrors DiffSplat's GObjaverse
