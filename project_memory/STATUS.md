@@ -26,6 +26,31 @@ Last updated: 2026-05-03
 - `configs/native_latent_training_example.yaml` now includes example commands
   for the patch builder, teacher targets, recon adapter, gates, masked denoiser,
   and local merge stages.
+- Committed the scene-local training scaffold as `4a1baf6` with a plain commit
+  message and no Cursor co-author trailer.
+- Started real H100 training work in the attached `gpu-a6-4` tmux session using
+  the existing Inpaint360GS `bag` geometry/mask artifacts:
+  - Patch dataset build:
+    `runs/scene_patch_training_h100/patch_dataset/scene_patch_dataset.json`
+    (`1` sample, `0` failures).
+  - Teacher target generation:
+    `runs/scene_patch_training_h100/teacher_targets/teacher_targets.json`
+    (`1` sample, `0` failures).
+  - Reconstruction-adapter smoke training:
+    `runs/scene_patch_training_h100/recon_adapter/train_recon_adapter_status.json`.
+    It trained `4` held-out pairs on CUDA for `1000` steps; loss improved from
+    `0.2850546837` to `0.0466557033`.
+  - Recon gate report:
+    `runs/scene_patch_training_h100/recon_gates/recon_gate_report.json`.
+    It passed the early adapter-loss gate, but still has no direct-vs-GSVAE
+    diagnostic pairs for this trained adapter.
+  - Masked latent denoiser mechanics run:
+    `runs/scene_patch_training_h100/masked_latent_denoiser/train_masked_latent_denoiser_status.json`.
+    It trained on the existing 32-sample native latent smoke dataset for `1000`
+    CUDA steps; masked loss improved from `1.9817237854` to `0.0206833798`, and
+    `final_context_error` was `0.0`, confirming hard unmasked-cell clamping.
+  These are the first executable adaptation/training runs, not yet final-quality
+  scene reconstruction or inpainting.
 - Downloaded the official GObjaverse `render_data_examples.zip` archive and ran
   a true in-domain DiffSplat sanity check. Added
   `tools/prepare_gobjaverse_sample.py`, which mirrors DiffSplat's GObjaverse
