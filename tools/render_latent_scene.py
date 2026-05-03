@@ -129,18 +129,23 @@ def _render_latent(torch, gsrecon, gsvae, device, latent_path, input_c2w, input_
             opacity_threshold=args.opacity_threshold,
         )
     image = outputs["image"].detach().cpu().numpy()[0]
-    alpha = outputs["alpha"].detach().cpu().numpy()[0]
-    depth = outputs["depth"].detach().cpu().numpy()[0]
+    alpha_tensor = outputs.get("alpha")
+    depth_tensor = outputs["depth"] if "depth" in outputs else outputs.get("raw_depth")
+    alpha = alpha_tensor.detach().cpu().numpy()[0] if alpha_tensor is not None else None
+    depth = depth_tensor.detach().cpu().numpy()[0] if depth_tensor is not None else None
     render_dir = os.path.join(args.output_dir, label)
     for idx in range(image.shape[0]):
         _save_png(os.path.join(render_dir, "rgb_%04d.png" % idx), image[idx])
-        _save_png(os.path.join(render_dir, "alpha_%04d.png" % idx), alpha[idx])
-        np.save(os.path.join(render_dir, "depth_%04d.npy" % idx), depth[idx].astype(np.float32))
+        if alpha is not None:
+            _save_png(os.path.join(render_dir, "alpha_%04d.png" % idx), alpha[idx])
+        if depth is not None:
+            np.save(os.path.join(render_dir, "depth_%04d.npy" % idx), depth[idx].astype(np.float32))
     return {
         "label": label,
         "latent_path": latent_path,
         "num_views": int(image.shape[0]),
         "rgb_dir": render_dir,
+        "output_keys": sorted(outputs.keys()),
     }
 
 
@@ -150,7 +155,7 @@ def main():
     status = {
         "ok": False,
         "args": vars(args),
-        "expected_outputs": ["before/rgb_*.png", "optional after/rgb_*.png", "alpha_*.png", "depth_*.npy"],
+        "expected_outputs": ["before/rgb_*.png", "optional after/rgb_*.png", "optional alpha_*.png", "optional depth_*.npy"],
     }
     try:
         args.sdxl_vae_path, args.tiny_vae_path = resolve_aux_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
