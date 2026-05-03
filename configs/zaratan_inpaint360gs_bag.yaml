@@ -51,6 +51,7 @@ external:
     python tools/preprocess_geometry.py
     --config {config_path}
     --output-dir {geometry_dir}
+    --max-views {max_views}
   gsrecon_command: >-
     python tools/run_gsrecon_export.py
     --diffsplat-root {diffsplat_root}

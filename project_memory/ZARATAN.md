@@ -182,6 +182,13 @@ Current geometry bring-up:
 - `19186495` is the direct `srun` geometry attempt for
   `runs/inpaint360gs_bag_srun_h100`; it was queued after switching away from
   `sbatch` dependency chains.
+- `19186495` later allocated and completed geometry successfully, writing
+  `runs/inpaint360gs_bag_srun_h100/geometry/geometry_manifest.json`.
+- This geometry run processed 16 views because the then-current external
+  command reloaded the YAML config and did not receive the
+  `--set pipeline.max_views=4` override. The follow-up local patch adds
+  `{max_views}` to the geometry command values and `--max-views {max_views}` to
+  the Zaratan config.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.

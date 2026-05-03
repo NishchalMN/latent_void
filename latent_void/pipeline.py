@@ -49,6 +49,7 @@ def prepare_geometry(config, dry_run=False):
         "config_path": config.get("_config_path", ""),
         "dataset_root": get_nested(config, "dataset.root"),
         "scene_id": get_nested(config, "dataset.scene"),
+        "max_views": get_nested(config, "pipeline.max_views"),
         "geometry_dir": dirs["geometry"],
         "geometry_manifest": os.path.join(dirs["geometry"], "geometry_manifest.json"),
     }

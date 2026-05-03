@@ -56,6 +56,9 @@ Implemented and verified locally:
 - `scripts/zaratan_srun_stage.sh` now runs staged H100 geometry,
   GSRecon/GSVAE reconstruction, SAM 3 segmentation, and final
   fuse/inpaint/render diagnostics through direct interactive `srun`.
+- Geometry external command formatting now passes `pipeline.max_views` through
+  as `--max-views`, so `--set pipeline.max_views=...` affects Marigold
+  preprocessing instead of only the dataset summary.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
@@ -126,6 +129,7 @@ python3 -m py_compile tools/preprocess_geometry.py tools/run_sam3_multiview.py t
 python3 -m unittest discover -s tests
 python3 -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_dry_after_mask_fixes --set pipeline.max_views=4 --dry-run
 python3 -m latent_void render --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_render_dry --dry-run
+python3 -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/local_max_views_contract --dry-run
 ```
 
 The local smoke environment lacks Pillow, so the two Pillow-dependent unit
@@ -292,6 +296,14 @@ runs/inpaint360gs_bag_srun_h100
 
 Run stages sequentially with `scripts/zaratan_srun_stage.sh`: `geometry`,
 `reconstruct`, `segment`, then `finish`.
+
+Latest Zaratan geometry note:
+
+- Direct `srun` geometry job `19186495` completed successfully and wrote
+  `runs/inpaint360gs_bag_srun_h100/geometry/geometry_manifest.json`.
+- That run processed 16 views because the older geometry command did not yet
+  pass the `--set pipeline.max_views=4` override into `tools/preprocess_geometry.py`.
+  The local fix after that run adds the missing `--max-views` command contract.
 
 Remaining model-adapter blocker:
 

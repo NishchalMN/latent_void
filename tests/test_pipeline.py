@@ -5,10 +5,27 @@ import unittest
 
 import numpy as np
 
-from latent_void.pipeline import fuse_void, run_latent_inpaint
+from latent_void.pipeline import fuse_void, prepare_geometry, run_latent_inpaint
 
 
 class PipelineTests(unittest.TestCase):
+    def test_prepare_geometry_formats_max_views_override(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            config = {
+                "_config_path": "/tmp/config.yaml",
+                "project": {"output_dir": tmp},
+                "dataset": {"type": "inpaint360gs", "root": "/tmp/data", "scene": "scene"},
+                "pipeline": {"max_views": 3},
+                "external": {
+                    "geometry_command": "python tools/preprocess_geometry.py --config {config_path} --output-dir {geometry_dir} --max-views {max_views}"
+                },
+            }
+            result = prepare_geometry(config, dry_run=True)
+            self.assertIn("--max-views 3", result["command"])
+        finally:
+            shutil.rmtree(tmp)
+
     def test_fuse_and_fallback_inpaint(self):
         tmp = tempfile.mkdtemp()
         try:
