@@ -63,6 +63,12 @@ Implemented and verified locally:
   by aliasing legacy `transformers.modeling_utils` helpers from
   `transformers.pytorch_utils` and locally restoring
   `find_pruneable_heads_and_indices` before importing DiffSplat.
+- DiffSplat auxiliary VAE snapshots are now explicit config inputs:
+  `checkpoints.sdxl_vae_path` and `checkpoints.tiny_vae_path`. The GSRecon and
+  render adapters map DiffSplat's hardcoded `madebyollin/sdxl-vae-fp16-fix`
+  and `madebyollin/taesdxl` repo IDs to those local snapshots.
+- `scripts/download_diffsplat_aux.py` downloads those VAE snapshots on the
+  login node, and `scripts/setup_zaratan_deps.sh` calls it by default.
 - Multi-view mask fusion with synthetic projected Gaussian data.
 - Latent void mask generation.
 - Fallback latent fill for plumbing tests.
@@ -134,6 +140,8 @@ python3 -m unittest discover -s tests
 python3 -m latent_void run --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_dry_after_mask_fixes --set pipeline.max_views=4 --dry-run
 python3 -m latent_void render --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_render_dry --dry-run
 python3 -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --set pipeline.max_views=4 --set project.output_dir=runs/local_max_views_contract --dry-run
+python3 -m latent_void reconstruct --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_reconstruct_command_aux --dry-run
+python3 -m latent_void render --config configs/zaratan_inpaint360gs_bag.yaml --set project.output_dir=runs/local_render_command_aux --dry-run
 ```
 
 The local smoke environment lacks Pillow, so the two Pillow-dependent unit
@@ -322,6 +330,13 @@ Latest Zaratan geometry note:
 - The first `wandb` stub needed a `ModuleSpec`; without it, importlib checks
   raised `ValueError: wandb.__spec__ is None`. The stub now sets
   `wandb.__spec__`.
+- The next reconstruct failure was:
+  `OSError: madebyollin/sdxl-vae-fp16-fix does not appear to have a file named
+  config.json`. This exposed another hidden DiffSplat dependency: SDXL GSVAE
+  constructs both the SDXL fp16 VAE and TinyAE from hardcoded Hugging Face repo
+  IDs. The fix is to download local snapshots with
+  `scripts/download_diffsplat_aux.py` and map those repo IDs to local paths in
+  the adapters.
 
 Remaining model-adapter blocker:
 

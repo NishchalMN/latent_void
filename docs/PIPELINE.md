@@ -50,6 +50,12 @@ config. The first H100 geometry attempt stalled before GPU use while resolving
 Marigold from Hugging Face inside the Slurm allocation, so compute jobs should
 not depend on outbound model downloads.
 
+DiffSplat's SDXL GSVAE also loads two Diffusers VAE repos at model
+construction time: `madebyollin/sdxl-vae-fp16-fix` and `madebyollin/taesdxl`.
+They must be downloaded on the login node with `scripts/download_diffsplat_aux.py`
+and passed through `--sdxl-vae-path` and `--tiny-vae-path`; otherwise offline
+H100 jobs fail before GSRecon inference starts.
+
 ### GSRecon
 
 Configured by `external.gsrecon_command`. It receives formatted values such as
@@ -73,6 +79,12 @@ still needs the full DiffSplat GPU dependency stack before it can run on H100.
 The Zaratan setup script installs the RaDe-GS `diff-gaussian-rasterization`
 extension in the heavy dependency path because DiffSplat imports that renderer
 during model initialization.
+
+The adapter patches known runtime compatibility issues with current Zaratan
+packages: Transformers 5 moved/removed a few legacy symbols DiffSplat imports,
+and DiffSplat imports `wandb` logging helpers even for inference. The adapter
+provides small compatibility shims and validates local auxiliary VAE snapshots
+before doing heavy model work.
 
 ### SAM 3
 

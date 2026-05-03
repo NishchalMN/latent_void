@@ -21,6 +21,8 @@ checkpoints:
   diffsplat_root: /home/gnanesh/scratch.msml612pcs3/latent_void/external/DiffSplat
   gsrecon_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat/gsrecon_gobj265k_cnp_even4
   gsvae_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat/gsvae_gobj265k_sdxl_fp16
+  sdxl_vae_path: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat_aux/sdxl-vae-fp16-fix
+  tiny_vae_path: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/diffsplat_aux/taesdxl
   sam3_root: /home/gnanesh/scratch.msml612pcs3/latent_void/external/sam3
   sam3_weights: /home/gnanesh/scratch.msml612pcs3/latent_void/checkpoints/sam3/sam3.pt
   latent_inpaint_weights: ""
@@ -57,6 +59,8 @@ external:
     --diffsplat-root {diffsplat_root}
     --weights {gsrecon_weights}
     --gsvae-weights {gsvae_weights}
+    --sdxl-vae-path {sdxl_vae_path}
+    --tiny-vae-path {tiny_vae_path}
     --dataset-root {dataset_root}
     --scene {scene_id}
     --geometry-manifest {geometry_manifest}
@@ -74,6 +78,8 @@ external:
     python tools/render_latent_scene.py
     --diffsplat-root {diffsplat_root}
     --gsvae-weights {gsvae_weights}
+    --sdxl-vae-path {sdxl_vae_path}
+    --tiny-vae-path {tiny_vae_path}
     --gaussian-npz {gaussian_npz}
     --latent-path {latent_path}
     --compare-latent-path {inpainted_latent_path}

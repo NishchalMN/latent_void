@@ -4,7 +4,7 @@ import unittest
 
 import yaml
 
-from latent_void.config import load_config, validate_config
+from latent_void.config import ConfigError, load_config, validate_config
 
 
 class ConfigTests(unittest.TestCase):
@@ -29,6 +29,34 @@ class ConfigTests(unittest.TestCase):
             self.assertTrue(validate_config(config))
         finally:
             os.remove(path)
+
+    def test_strict_paths_require_aux_vae_configs(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            for name in ["data", "diffsplat", "gsrecon", "gsvae", "sam3", "sdxl", "tiny"]:
+                os.makedirs(os.path.join(tmp, name))
+            config = {
+                "project": {"output_dir": os.path.join(tmp, "out"), "device": "cpu"},
+                "dataset": {"type": "inpaint360gs", "root": os.path.join(tmp, "data"), "scene": "scene"},
+                "checkpoints": {
+                    "diffsplat_root": os.path.join(tmp, "diffsplat"),
+                    "gsrecon_weights": os.path.join(tmp, "gsrecon"),
+                    "gsvae_weights": os.path.join(tmp, "gsvae"),
+                    "sam3_root": os.path.join(tmp, "sam3"),
+                    "sdxl_vae_path": os.path.join(tmp, "sdxl"),
+                    "tiny_vae_path": os.path.join(tmp, "tiny"),
+                },
+                "pipeline": {"mask_threshold": 0.5, "latent_downsample": 8},
+                "hpc": {"account": "msml612pcs3-class", "partition": "gpu-h100"},
+            }
+            with self.assertRaises(ConfigError):
+                validate_config(config, strict_paths=True)
+            open(os.path.join(tmp, "sdxl", "config.json"), "w").close()
+            open(os.path.join(tmp, "tiny", "config.json"), "w").close()
+            self.assertTrue(validate_config(config, strict_paths=True))
+        finally:
+            import shutil
+            shutil.rmtree(tmp)
 
 
 if __name__ == "__main__":

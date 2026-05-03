@@ -21,6 +21,8 @@ checkpoints:
   diffsplat_root: ${DIFFSPLAT_ROOT:-/path/to/DiffSplat}
   gsrecon_weights: ${GSRECON_WEIGHTS:-/path/to/gsrecon.ckpt}
   gsvae_weights: ${GSVAE_WEIGHTS:-/path/to/gsvae.ckpt}
+  sdxl_vae_path: ${SDXL_VAE_PATH:-/path/to/sdxl-vae-fp16-fix}
+  tiny_vae_path: ${TINY_VAE_PATH:-/path/to/taesdxl}
   sam3_root: ${SAM3_ROOT:-/path/to/sam3}
   sam3_weights: ${SAM3_WEIGHTS:-/path/to/sam3.pt}
   latent_inpaint_weights: ${LATENT_INPAINT_WEIGHTS:-}
@@ -51,6 +53,9 @@ external:
   gsrecon_command: >-
     python {diffsplat_root}/tools/run_gsrecon.py
     --weights {gsrecon_weights}
+    --gsvae-weights {gsvae_weights}
+    --sdxl-vae-path {sdxl_vae_path}
+    --tiny-vae-path {tiny_vae_path}
     --dataset-root {dataset_root}
     --scene {scene_id}
     --output-dir {gsrecon_dir}
@@ -66,6 +71,8 @@ external:
     python tools/render_latent_scene.py
     --diffsplat-root {diffsplat_root}
     --gsvae-weights {gsvae_weights}
+    --sdxl-vae-path {sdxl_vae_path}
+    --tiny-vae-path {tiny_vae_path}
     --gaussian-npz {gaussian_npz}
     --latent-path {latent_path}
     --compare-latent-path {inpainted_latent_path}

@@ -81,10 +81,22 @@ def validate_config(config, strict_paths=False):
         raise ConfigError("pipeline.latent_downsample must be >= 1")
 
     if strict_paths:
-        for dotted_key in ["dataset.root", "checkpoints.diffsplat_root", "checkpoints.sam3_root"]:
+        for dotted_key in [
+            "dataset.root",
+            "checkpoints.diffsplat_root",
+            "checkpoints.gsrecon_weights",
+            "checkpoints.gsvae_weights",
+            "checkpoints.sam3_root",
+            "checkpoints.sdxl_vae_path",
+            "checkpoints.tiny_vae_path",
+        ]:
             path = get_nested(config, dotted_key)
             if path and not os.path.exists(path):
                 raise ConfigError("%s does not exist: %s" % (dotted_key, path))
+        for dotted_key in ["checkpoints.sdxl_vae_path", "checkpoints.tiny_vae_path"]:
+            path = get_nested(config, dotted_key)
+            if path and os.path.isdir(path) and not os.path.exists(os.path.join(path, "config.json")):
+                raise ConfigError("%s missing config.json: %s" % (dotted_key, path))
 
     return True
 

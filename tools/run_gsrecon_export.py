@@ -8,6 +8,18 @@ import sys
 
 import numpy as np
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from latent_void.diffsplat_compat import (
+    patch_diffusers_model_paths,
+    patch_optional_imports,
+    patch_transformers_compat,
+    resolve_aux_model_paths,
+    validate_aux_model_paths,
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -20,6 +32,8 @@ def parse_args():
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--opt-type", default="gsvae_sdxl_fp16")
+    parser.add_argument("--sdxl-vae-path", default="")
+    parser.add_argument("--tiny-vae-path", default="")
     parser.add_argument("--ckpt-iter", type=int, default=-1)
     parser.add_argument("--gsvae-ckpt-iter", type=int, default=-1)
     parser.add_argument("--preflight-only", action="store_true")
@@ -82,55 +96,6 @@ def _load_scene_tensors(manifest, torch, device, num_input_views):
     }
 
 
-def _patch_transformers_compat():
-    try:
-        import transformers.modeling_utils as modeling_utils
-        import transformers.pytorch_utils as pytorch_utils
-    except Exception:
-        return False
-    patched = False
-    for name in ("apply_chunking_to_forward", "prune_linear_layer", "Conv1D"):
-        if not hasattr(modeling_utils, name) and hasattr(pytorch_utils, name):
-            setattr(modeling_utils, name, getattr(pytorch_utils, name))
-            patched = True
-    if not hasattr(modeling_utils, "find_pruneable_heads_and_indices"):
-        import torch
-
-        def find_pruneable_heads_and_indices(heads, n_heads, head_size, already_pruned_heads):
-            heads = set(heads) - set(already_pruned_heads)
-            mask = torch.ones(n_heads, head_size)
-            for head in heads:
-                head = head - sum(1 if pruned_head < head else 0 for pruned_head in already_pruned_heads)
-                mask[head] = 0
-            mask = mask.view(-1).contiguous().eq(1)
-            index = torch.arange(len(mask))[mask].long()
-            return heads, index
-
-        modeling_utils.find_pruneable_heads_and_indices = find_pruneable_heads_and_indices
-        patched = True
-    return patched
-
-
-def _patch_optional_imports():
-    import importlib.machinery
-    import types
-
-    if "wandb" not in sys.modules:
-        wandb = types.ModuleType("wandb")
-        wandb.__spec__ = importlib.machinery.ModuleSpec("wandb", loader=None)
-
-        def noop(*args, **kwargs):
-            return None
-
-        wandb.init = noop
-        wandb.log = noop
-        wandb.finish = noop
-        wandb.define_metric = noop
-        wandb.Image = lambda *args, **kwargs: args[0] if args else None
-        wandb.run = None
-        sys.modules["wandb"] = wandb
-
-
 def _project_points(points, c2ws, fxfycxcy, height, width):
     uvs = np.zeros((len(c2ws), points.shape[0], 2), dtype=np.float32)
     visibility = np.zeros((len(c2ws), points.shape[0]), dtype=np.uint8)
@@ -159,8 +124,9 @@ def _run_model(args, manifest):
     import torch
     from einops import rearrange
 
-    _patch_transformers_compat()
-    _patch_optional_imports()
+    patch_transformers_compat()
+    patch_optional_imports()
+    patch_diffusers_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
     from src.models import GSRecon, GSAutoencoderKL
     from src.options import opt_dict
     from src.utils import unproject_depth
@@ -247,6 +213,7 @@ def main():
         ],
     }
     try:
+        args.sdxl_vae_path, args.tiny_vae_path = resolve_aux_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
         manifest = _load_manifest(args.geometry_manifest)
         missing = [
             path for entry in manifest["views"]
@@ -258,6 +225,7 @@ def main():
         for label, path in [("diffsplat_root", args.diffsplat_root), ("weights", args.weights), ("gsvae_weights", args.gsvae_weights)]:
             if not os.path.exists(path):
                 raise RuntimeError("%s does not exist: %s" % (label, path))
+        validate_aux_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
         preflight.update({"ok": True, "num_geometry_views": len(manifest["views"])})
         if args.preflight_only:
             return _write_status(args.output_dir, preflight, 0)

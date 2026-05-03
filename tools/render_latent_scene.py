@@ -8,6 +8,18 @@ import sys
 
 import numpy as np
 
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+from latent_void.diffsplat_compat import (
+    patch_diffusers_model_paths,
+    patch_optional_imports,
+    patch_transformers_compat,
+    resolve_aux_model_paths,
+    validate_aux_model_paths,
+)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -19,6 +31,8 @@ def parse_args():
     parser.add_argument("--compare-latent-path", default="")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--opt-type", default="gsvae_sdxl_fp16")
+    parser.add_argument("--sdxl-vae-path", default="")
+    parser.add_argument("--tiny-vae-path", default="")
     parser.add_argument("--gsvae-ckpt-iter", type=int, default=-1)
     parser.add_argument("--max-render-views", type=int, default=8)
     parser.add_argument("--opacity-threshold", type=float, default=0.0)
@@ -75,6 +89,9 @@ def _load_model(args):
     sys.path.insert(0, args.diffsplat_root)
     import torch
 
+    patch_transformers_compat()
+    patch_optional_imports()
+    patch_diffusers_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
     from src.models import GSRecon, GSAutoencoderKL
     from src.options import opt_dict
     from src.utils import util
@@ -134,6 +151,7 @@ def main():
         "expected_outputs": ["before/rgb_*.png", "optional after/rgb_*.png", "alpha_*.png", "depth_*.npy"],
     }
     try:
+        args.sdxl_vae_path, args.tiny_vae_path = resolve_aux_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
         for label, path in [
             ("diffsplat_root", args.diffsplat_root),
             ("gsvae_weights", args.gsvae_weights),
@@ -142,6 +160,7 @@ def main():
         ]:
             if not os.path.exists(path):
                 raise RuntimeError("%s does not exist: %s" % (label, path))
+        validate_aux_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
         if args.compare_latent_path and not os.path.exists(args.compare_latent_path):
             raise RuntimeError("compare_latent_path does not exist: %s" % args.compare_latent_path)
         input_c2w, input_intr, all_c2w, all_intr = _load_camera_arrays(args.gaussian_npz)

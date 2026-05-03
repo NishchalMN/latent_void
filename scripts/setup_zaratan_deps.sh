@@ -72,6 +72,10 @@ if [[ "${DOWNLOAD_MARIGOLD:-1}" == "1" ]]; then
   python scripts/download_marigold.py --output-dir "${MARIGOLD_CKPT_DIR:-${ROOT}/checkpoints/marigold}"
 fi
 
+if [[ "${DOWNLOAD_DIFFSPLAT_AUX:-1}" == "1" ]]; then
+  python scripts/download_diffsplat_aux.py --output-dir "${DIFFSPLAT_AUX_CKPT_DIR:-${ROOT}/checkpoints/diffsplat_aux}"
+fi
+
 if [[ "${INSTALL_GPU_DEPS:-0}" == "1" ]]; then
   CUDA_MODULE="${CUDA_MODULE:-cuda/12.3.0/gcc/11.3.0/zen2}"
   module load "${CUDA_MODULE}" >/dev/null 2>&1 || module load "${CUDA_MODULE}" || true

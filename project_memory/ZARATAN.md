@@ -134,6 +134,12 @@ Download Marigold snapshots for offline compute-node use:
 python scripts/download_marigold.py --output-dir checkpoints/marigold
 ```
 
+Download DiffSplat's auxiliary VAE snapshots for offline compute-node use:
+
+```bash
+python scripts/download_diffsplat_aux.py --output-dir checkpoints/diffsplat_aux
+```
+
 That heavy setup installs PyTorch, SAM 3, DiffSplat requirements,
 Marigold-compatible Diffusers, Transformers, and the RaDe-GS
 `diff-gaussian-rasterization` extension required by DiffSplat imports.
@@ -203,6 +209,13 @@ Current geometry bring-up:
   imports, since export/inference does not need logging.
 - The first no-op `wandb` stub raised `ValueError: wandb.__spec__ is None`;
   the follow-up patch assigns a `ModuleSpec` to the stub.
+- The next reconstruct failure was:
+  `OSError: madebyollin/sdxl-vae-fp16-fix does not appear to have a file named
+  config.json`. DiffSplat's SDXL GSVAE hardcodes the SDXL fp16 VAE and TinyAE
+  Hugging Face repo IDs during construction, so the follow-up adapter work makes
+  those local snapshot paths explicit and maps the hardcoded repo IDs to
+  `checkpoints/diffsplat_aux/sdxl-vae-fp16-fix` and
+  `checkpoints/diffsplat_aux/taesdxl`.
 - `19185424` was a backup `gpu-a100` geometry job and was canceled.
 - `19186443` was a later stray `gpu-a100` geometry submission, estimated for
   `2026-05-02T21:00:00`, and was also canceled.

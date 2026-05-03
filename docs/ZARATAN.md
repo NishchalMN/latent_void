@@ -30,6 +30,7 @@ cd /home/gnanesh/scratch.msml612pcs3/latent_void
 scripts/setup_zaratan_deps.sh
 scripts/download_inpaint360gs.sh
 python scripts/download_marigold.py --output-dir checkpoints/marigold
+python scripts/download_diffsplat_aux.py --output-dir checkpoints/diffsplat_aux
 python -m latent_void validate-config --config configs/zaratan_inpaint360gs_bag.yaml
 python -m latent_void discover-dataset --config configs/zaratan_inpaint360gs_bag.yaml
 python -m latent_void prepare-geometry --config configs/zaratan_inpaint360gs_bag.yaml --dry-run
@@ -147,3 +148,10 @@ INSTALL_GPU_DEPS=1 scripts/setup_zaratan_deps.sh
 Zaratan config points at `checkpoints/marigold/depth-v1-1` and
 `checkpoints/marigold/normals-v1-1` so H100 jobs load local files instead of
 trying to reach Hugging Face from a compute node.
+
+The setup script also downloads DiffSplat auxiliary VAE snapshots by default:
+`checkpoints/diffsplat_aux/sdxl-vae-fp16-fix` and
+`checkpoints/diffsplat_aux/taesdxl`. These are required because DiffSplat's
+SDXL GSVAE hardcodes `madebyollin/sdxl-vae-fp16-fix` and `madebyollin/taesdxl`
+inside model construction. The local adapters pass those paths explicitly so
+offline H100 jobs do not try to resolve Hugging Face repo IDs.
