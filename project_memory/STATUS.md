@@ -51,6 +51,26 @@ Last updated: 2026-05-03
     `final_context_error` was `0.0`, confirming hard unmasked-cell clamping.
   These are the first executable adaptation/training runs, not yet final-quality
   scene reconstruction or inpainting.
+- Added progress logging to `tools/train_recon_adapter.py` and
+  `tools/train_masked_latent_denoiser.py`, committed as `d91242d`, so long runs
+  report step/loss updates instead of appearing stuck or suspiciously fast.
+- Ran a longer H100 masked-latent denoiser job from the available best `bag`
+  local-patch latent:
+  - Generated `2048` synthetic-mask samples at
+    `runs/scene_patch_training_long/native_latent_2048/dataset_manifest.json`.
+  - Trained `runs/scene_patch_training_long/masked_latent_denoiser_20k/` for
+    `20000` CUDA steps with batch size `8`, initialized from the earlier
+    `1000`-step checkpoint.
+  - Loss improved from `1.9393244982` to `0.0003723427`; context error remained
+    `0.0`, so unmasked latent clamping held throughout.
+- Queued multi-scene Inpaint360GS data generation in the attached H100 tmux
+  session for `car`, `cube`, `cone_red`, `cone_yellow`, `garden_toys`, `truck`,
+  `fruits`, `redbull`, `toys`, and `doppelherz`. The command writes per-scene
+  geometry/mask runs under `runs/scene_patch_training_long/scenes/`, then builds
+  `runs/scene_patch_training_long/multiscene_patch_dataset/`, generates teacher
+  targets, and trains a `10000`-step multi-scene reconstruction adapter. `car`
+  geometry and SAM segmentation completed successfully before moving on to
+  `cube`.
 - Downloaded the official GObjaverse `render_data_examples.zip` archive and ran
   a true in-domain DiffSplat sanity check. Added
   `tools/prepare_gobjaverse_sample.py`, which mirrors DiffSplat's GObjaverse
