@@ -419,18 +419,21 @@ def stage_gs_inpaint(scene_data, scene_output, scene_name, resolution, inpaint_r
     ) == 0
 
 
-def stage_evaluate(scene_output, inpaint_root, log_dir):
+def stage_evaluate(scene_output, inpaint_root, log_dir, skip_fid=False):
     """Stage 11: Evaluation."""
+    cmd = [sys.executable, os.path.join(inpaint_root, "tools", "metrics_fid_masked.py"),
+           "-m", scene_output]
+    if skip_fid:
+        cmd.append("--skip-fid")
     return run_cmd(
-        [sys.executable, os.path.join(inpaint_root, "tools", "metrics_fid_masked.py"),
-         "-m", scene_output],
+        cmd,
         cwd=inpaint_root,
         log_path=os.path.join(log_dir, "evaluation.log"),
     ) == 0
 
 
 def process_scene(scene_name, data_root, output_root, resolution, inpaint_root,
-                   skip_seg=False, skip_sam=False, start_stage=1):
+                   skip_seg=False, skip_sam=False, start_stage=1, skip_fid_eval=False):
     """Run the full pipeline for a single scene."""
     scene_data = os.path.join(data_root, scene_name)
     scene_output = os.path.join(output_root, scene_name)
@@ -560,7 +563,7 @@ def process_scene(scene_name, data_root, output_root, resolution, inpaint_root,
     status["stages"]["gs_inpaint"] = "ok" if ok else "fail"
 
     print(f"\n--- Stage 11/11: Evaluation ---")
-    ok = stage_evaluate(scene_output, inpaint_root, log_dir)
+    ok = stage_evaluate(scene_output, inpaint_root, log_dir, skip_fid=skip_fid_eval)
     status["stages"]["evaluation"] = "ok" if ok else "fail"
 
     status["elapsed_seconds"] = round(time.time() - t0, 1)
@@ -584,6 +587,8 @@ def main():
                         help="Skip SAM + 3DGS training but re-run mask association and distillation")
     parser.add_argument("--start-stage", type=int, default=1,
                         help="Start from this stage number (1-11), skip earlier stages")
+    parser.add_argument("--skip-fid-eval", action="store_true",
+                        help="Skip FID in metrics (offline GPU nodes); PSNR/SSIM/LPIPS still run")
     parser.add_argument("--data-root", default=None)
     parser.add_argument("--output-root", default=None)
     args = parser.parse_args()
@@ -604,7 +609,8 @@ def main():
         status = process_scene(
             scene, data_root, output_root, args.resolution, inpaint_root,
             skip_seg=args.skip_seg, skip_sam=args.skip_sam,
-            start_stage=args.start_stage)
+            start_stage=args.start_stage,
+            skip_fid_eval=args.skip_fid_eval)
         all_status[scene] = status
 
     summary_path = os.path.join(output_root, "pipeline_summary.json")
