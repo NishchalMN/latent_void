@@ -94,80 +94,203 @@ unbounded scenes [8].
 
 ## 3. Approach
 
-### 3.1 Scene Input
+The final project uses a two-track approach. Track A is a practical
+Inpaint360GS baseline that produces reportable object-removal outputs and
+metrics. Track B is the research contribution: native DiffSplat/GSVAE latent
+void inpainting. Keeping both tracks was deliberate. The baseline gives a
+strong, defensible answer for the course deadline, while the native latent path
+tests the more novel hypothesis and exposes the exact reconstruction blockers
+that must be solved next.
 
-The MVP target is an Inpaint360GS scene. The loader reads:
+### 3.1 Design Constraints
 
-- RGB views from the configured image directory.
-- COLMAP camera intrinsics and extrinsics from `sparse/0`.
-- Scene and run settings from YAML configuration.
-- A text prompt naming the object to remove.
+The project was built around four constraints from the proposal and later
+debugging notes:
 
-The code keeps dataset and checkpoint paths config-driven so the same pipeline
-can later support SPIn-NeRF and DL3DV-style adapters.
+- Use real calibrated scenes, not only object-centric generated examples.
+- Reuse pretrained models wherever possible: Inpaint360GS, DiffSplat GSRecon,
+  GSVAE, SAM 3, Marigold, and the available Gaussian rasterizers.
+- Keep large models and data on Zaratan, with local code development and H100
+  execution through `tmux` plus interactive `srun`.
+- Make every stage resumable and auditable through manifests, JSON status
+  files, saved tensors, render sheets, and project memory notes.
 
-### 3.2 Geometry Preprocessing
+The resulting system is not a monolithic script. It is a set of adapters with
+explicit contracts between stages. This made it possible to replace or debug
+Marigold, GSRecon, SAM 3, latent denoising, and rendering independently.
 
-DiffSplat GSRecon does not accept RGB-only input in the checkpoint used for this
-project. The preprocessing stage generates the missing channels:
+### 3.2 Track A: Inpaint360GS Baseline
 
-- Depth maps from Marigold depth.
-- Surface normals from Marigold normals.
-- Coordinate maps from camera intrinsics, extrinsics, and estimated depth.
-- Normalized camera frames suitable for DiffSplat-style reconstruction.
+The baseline track uses the official Inpaint360GS-style workflow to produce a
+working object-removal result on the `bag` scene. This track is important
+because it gives a real 3D inpainting comparison point while the native latent
+branch is still gated by reconstruction quality.
 
-This stage writes a `geometry_manifest.json` that records every view, image
-path, geometry tensor path, camera matrix, and scaled intrinsic.
+The baseline stages are:
 
-### 3.3 GSRecon and GSVAE Encoding
+1. Train a vanilla 3DGS source scene from the calibrated images.
+2. Segment candidate objects in 2D views.
+3. Associate 2D masks with the 3D Gaussian scene.
+4. Distill semantic labels into the scene.
+5. Identify the target object using unseen-mask overlap or a center-region
+   fallback.
+6. Remove the selected object through the object-aware 3DGS inpainting path.
+7. Generate virtual camera views, LaMa-filled color/depth guidance, fused point
+   clouds, and final rendered outputs.
+8. Evaluate masked, non-masked, and full-image quality with PSNR, SSIM, and
+   LPIPS.
 
-The `tools/run_gsrecon_export.py` adapter loads the DiffSplat repository and
-checkpoints on Zaratan, applies compatibility patches for the installed Python
-stack, and runs GSRecon plus GSVAE encoding. It exports:
+This baseline also revealed an optimization tradeoff: the longer `20000`
+iteration result improves the masked hole region, while the `5000` iteration
+result preserves the global/background region better. The report therefore
+presents baseline success as a measured tradeoff, not as a single perfect
+checkpoint.
 
-- `gaussians.npz`: positions, color, scale, rotation, opacity, projections, and
-  visibility.
-- `gs_grid.npy`: structured Gaussian grid.
-- `latent.npy`: scaled GSVAE latent tensor.
+### 3.3 Track B: Native Latent Void Pipeline
 
-The exported projection arrays are important because they connect each Gaussian
-to the calibrated image masks used during object deletion.
+The native latent track is the core research direction. Its full data flow is:
 
-### 3.4 SAM 3 Multi-View Segmentation
+```text
+calibrated RGB scene
+  -> Marigold depth/normals + COLMAP coordinate maps
+  -> DiffSplat GSRecon structured Gaussian grid
+  -> GSVAE latent tensor
+  -> SAM 3 multi-view object masks
+  -> Gaussian-level deletion mask
+  -> latent void mask
+  -> masked latent denoiser / optimization
+  -> decoded Gaussian patch
+  -> merged scene and before/after renders
+```
 
-The `tools/run_sam3_multiview.py` wrapper runs SAM 3 over each selected view
-using the object prompt. It supports the Hugging Face Transformers SAM 3 API and
-the cloned official repository backend. For the MVP, the object prompt was
-`bag`. Each output mask is resized to the same geometry resolution used by
-GSRecon so that projected Gaussian coordinates and mask pixels agree.
+This design avoids independently inpainting each camera view. The intended
+model edits one shared 3D latent representation, clamps unmasked cells back to
+the original context after every denoising step, and then decodes a consistent
+Gaussian scene.
 
-### 3.5 3D Mask Fusion
+### 3.4 Scene Loading and Geometry Completion
 
-The mask fusion stage projects each Gaussian into each segmented view, samples
-the corresponding binary mask, and computes a masked-visible vote ratio. A
-Gaussian is deleted if its score exceeds the configured threshold. The result is
-a 3D deletion mask, not just a set of 2D holes.
+The first scene target is Inpaint360GS `bag`. The dataset loader reads RGB
+views and COLMAP cameras from `sparse/0`. DiffSplat GSRecon expects more than
+RGB, so the preprocessing stage generates the missing geometry channels:
 
-The deletion mask is also reshaped through the Gaussian grid metadata and
-resized into the latent spatial layout. This produces `latent_void_mask.npy`,
-which marks where in the GSVAE latent tensor the object has been removed.
+- Marigold depth maps from each RGB view.
+- Marigold surface normals.
+- Coordinate maps from depth, intrinsics, and camera poses.
+- Optional object-centered local patch crops and camera canonicalization.
 
-### 3.6 Latent Inpainting
+The output is `geometry_manifest.json`, which records every view, image tensor,
+normal tensor, coordinate tensor, depth map, camera transform, and scaled
+intrinsic. This manifest is the first major reproducibility checkpoint.
 
-The current MVP includes a fallback latent fill that replaces masked latent
-cells with channel-wise means from unmasked cells. This is intentionally a
-plumbing baseline. It proves that the pipeline can create a latent void, produce
-an edited latent tensor, decode/render it, and preserve the data contracts
-needed for the final method.
+### 3.5 DiffSplat GSRecon and GSVAE Encoding
 
-The planned final inpainting module should replace this fallback with masked
-latent denoising or optimization:
+The `tools/run_gsrecon_export.py` adapter loads DiffSplat and exports three
+representations:
 
-- Keep unmasked latent/Gaussian regions fixed.
-- Update only the void.
-- Condition on surrounding scene context.
-- Optionally reuse original-scene attention when compatible.
-- Optimize render consistency, depth, opacity, and artifact penalties.
+- `gaussians.npz`: explicit Gaussian attributes plus projection arrays.
+- `gs_grid.npy`: the 12-channel structured Gaussian grid.
+- `latent.npy`: the scaled GSVAE latent tensor.
+
+The projection arrays connect each Gaussian to each calibrated view. Without
+them, SAM 3 masks could only be treated as 2D observations; with them, the
+pipeline can vote on actual Gaussian deletion.
+
+The project also added an in-domain GObjaverse sanity check. That check rendered
+recognizable object outputs through both direct GS-grid and GSVAE branches,
+confirming that the DiffSplat install, checkpoints, and renderer are healthy.
+The failure mode is therefore real-scene domain mismatch, not a broken GPU
+environment.
+
+### 3.6 SAM 3 Multi-View Object Selection
+
+SAM 3 provides promptable concept segmentation. The wrapper runs a prompt such
+as `bag` over each calibrated view and writes one mask per selected image. The
+masks are resized to the GSRecon geometry resolution, so projected Gaussian
+coordinates and mask pixels share the same coordinate system.
+
+The SAM stage is intentionally backend-flexible. It can use the Transformers
+SAM 3 API or fall back to a cloned repository backend. This mattered on Zaratan,
+where model access and package versions changed during debugging.
+
+### 3.7 Gaussian Deletion and Latent Void Construction
+
+For each Gaussian, the fusion stage checks where that Gaussian projects in each
+visible view and samples the corresponding SAM mask. It computes:
+
+```text
+deletion_score(g) = masked_visible_votes(g) / visible_votes(g)
+```
+
+If the score exceeds the configured threshold, the Gaussian is marked for
+deletion. The result is a true 3D deletion mask rather than a set of unrelated
+2D holes.
+
+The Gaussian deletion mask is then reshaped through the exported grid metadata
+and downsampled into the latent tensor layout, creating `latent_void_mask.npy`.
+This mask tells the latent inpainter exactly which latent cells may change.
+
+### 3.8 Scene-Local Patch Adaptation
+
+Direct full-scene DiffSplat reconstruction was not readable enough for final
+inpainting. The project therefore introduced scene-local patches:
+
+- crop around the object mask in every selected view,
+- adjust intrinsics into crop coordinates,
+- optionally canonicalize 3D coordinates around the object,
+- composite non-object regions to white to better match DiffSplat's
+  object-centric GObjaverse conventions,
+- generate held-out view targets for reconstruction supervision.
+
+This patch path is the bridge between object-centric pretrained DiffSplat and
+real-scene object removal. It also gives concrete gates:
+
+- Direct GS-grid render should resemble the local patch.
+- GSVAE reconstruction should stay close to direct GS-grid render.
+- Voided render should remove the object consistently.
+- Inpainted render should fill the void while preserving unmasked content.
+
+### 3.9 Masked Latent Denoising Objective
+
+The learned latent inpainter is trained self-supervised from intact latents.
+Synthetic object-like masks create training pairs without requiring paired
+object-present/object-removed 3D scenes. The current denoiser is a residual
+masked latent model, not yet the final diffusion model, but it implements the
+most important invariant:
+
+```text
+z_next = z_pred * m + z_context * (1 - m)
+```
+
+Here `m` is the latent void mask. This guarantees that unmasked cells are
+preserved exactly, which the H100 runs confirmed with final context error `0.0`.
+The planned stronger version would add diffusion noise prediction,
+Min-SNR-weighted latent losses, held-out render losses, opacity/depth cleanup,
+and optional attention injection from the original scene.
+
+### 3.10 Merge and Render
+
+After latent editing, the decoded local Gaussian patch must be merged back into
+the full scene. The merge scaffold removes deleted full-scene Gaussians, filters
+local decoded Gaussians by opacity and visibility, concatenates the surviving
+local Gaussians with the preserved full scene, and renders diagnostics. The
+project currently treats this merge as scaffolding because reconstruction
+quality is still the dominant blocker.
+
+### 3.11 Evaluation Strategy
+
+The evaluation is intentionally split:
+
+- Baseline outputs are evaluated with masked, non-masked, and full-image PSNR,
+  SSIM, and LPIPS.
+- Native latent infrastructure is evaluated with stage gates: valid geometry
+  manifests, valid Gaussian/latent shapes, SAM mask confidence, deletion count,
+  context preservation, held-out latent MSE, reconstruction-adapter loss, and
+  render diagnostic sheets.
+- Visual claims are only made when the corresponding render branch is complete.
+  In particular, `iteration_12000` has video/point-cloud artifacts but does not
+  currently have the same complete inpaint image folder as `5000` and `20000`,
+  so it is treated as a process artifact rather than a final checkpoint.
 
 ## 4. Implementation
 
@@ -254,11 +377,11 @@ into a runnable H100 pipeline.
 
 ### 6.1 Local Tests
 
-Local verification on May 5, 2026 after fast-forwarding to GitHub/Zaratan
-commit `c3e4f9a`:
+Local verification on May 5, 2026 after updating the report against the current
+GitHub/Zaratan project state:
 
 ```text
-Ran 27 tests in 0.377s
+Ran 27 tests in 0.483s
 OK (skipped=2)
 ```
 
@@ -341,23 +464,77 @@ conservative pruning removed `52,216 / 1,688,912` Gaussians and aggressive
 pruning removed `83,877 / 1,688,912` Gaussians, but both left dark object-shaped
 smears.
 
+The Bag technical notes add a second baseline story for the actual `bag` scene.
+The following figure links point to Zaratan artifacts. They are intentionally
+included in the report as Markdown images; they render when the report is opened
+from the Zaratan checkout where `output/` and `runs/` exist.
+
+![Bag fixed-view baseline, iteration 5000](../output/inpaint360/bag/inpaint/ours_object_inpaint_virtual/iteration_5000/renders/test_IMG_0186.png)
+
+Figure 1. Fixed test-camera render from the `bag` Inpaint360GS baseline at
+iteration `5000`.
+
+![Bag fixed-view baseline, iteration 20000](../output/inpaint360/bag/inpaint/ours_object_inpaint_virtual/iteration_20000/renders/test_IMG_0205.png)
+
+Figure 2. Fixed test-camera render from the same baseline at iteration `20000`.
+
+![Bag orbit frame, iteration 5000](../output/inpaint360/bag/video/ours__object_inpaint_virtual/iteration_5000/00004.png)
+
+Figure 3. Orbit/video evidence for iteration `5000`.
+
+![Bag orbit frame, iteration 12000](../output/inpaint360/bag/video/ours__object_inpaint_virtual/iteration_12000/00223.png)
+
+Figure 4. Orbit/video evidence for iteration `12000`. This iteration has video
+and point-cloud artifacts, but the matching `inpaint/.../iteration_12000/`
+folder is incomplete, so it is not used as a final apples-to-apples checkpoint.
+
+![Bag orbit frame, iteration 20000](../output/inpaint360/bag/video/ours__object_inpaint_virtual/iteration_20000/00004.png)
+
+Figure 5. Orbit/video evidence for iteration `20000`.
+
+![Native branch staged render diagnostics](../runs/visual_inspection/inpaint360gs_bag_srun_h100_staged_render_diagnostics.png)
+
+Figure 6. Native latent branch staged render diagnostics from the first H100 MVP.
+
+![Native branch local patch diagnostics](../runs/visual_inspection/inpaint360gs_bag_srun_h100_local_patch_render_diagnostics_sheet.png)
+
+Figure 7. Local patch diagnostics showing the real-scene source-reconstruction
+quality gate.
+
+![GObjaverse official DiffSplat sanity check](../runs/visual_inspection/gobjaverse_official_example_render_diagnostics_sheet.png)
+
+Figure 8. In-domain GObjaverse sanity check. The recognizable render here
+supports the conclusion that the DiffSplat environment is healthy and that the
+real-scene issue is a domain/input-contract problem.
+
 The project also integrated an official Inpaint360GS baseline/evaluation path.
-For the `bag` scene, the recorded evaluation file contains:
+For the `bag` scene, the Bag report records the following matched metrics:
 
 | Metric | Value |
 | --- | ---: |
-| SSIM masked | 0.9803727 |
-| PSNR masked | 26.2941284 |
-| LPIPS masked | 0.0149063 |
-| SSIM full | 0.7729949 |
-| PSNR full | 22.8350258 |
-| LPIPS full | 0.2442329 |
-| FID | null |
+| Iteration 5000 masked SSIM | 0.9803727 |
+| Iteration 5000 masked PSNR | 26.2941284 |
+| Iteration 5000 masked LPIPS | 0.0149063 |
+| Iteration 5000 non-masked SSIM | 0.7909024 |
+| Iteration 5000 non-masked PSNR | 25.6700268 |
+| Iteration 5000 non-masked LPIPS | 0.2281894 |
+| Iteration 5000 full SSIM | 0.7729949 |
+| Iteration 5000 full PSNR | 22.8350258 |
+| Iteration 5000 full LPIPS | 0.2442329 |
+| Iteration 20000 masked SSIM | 0.9849212 |
+| Iteration 20000 masked PSNR | 31.8034344 |
+| Iteration 20000 masked LPIPS | 0.0107859 |
+| Iteration 20000 non-masked SSIM | 0.7039922 |
+| Iteration 20000 non-masked PSNR | 21.6980400 |
+| Iteration 20000 non-masked LPIPS | 0.3062439 |
+| Iteration 20000 full SSIM | 0.6881227 |
+| Iteration 20000 full PSNR | 21.1586590 |
+| Iteration 20000 full LPIPS | 0.3196602 |
 
-This baseline is useful for comparison, but it is not our native DiffSplat
-latent method. The corresponding pipeline summary still marks some late
-Inpaint360GS stages as failed in the orchestrator, so these metrics should be
-treated as baseline/evaluation artifacts rather than final project success.
+The interpretation is clear: `20000` is stronger inside the removed-object
+region, while `5000` is stronger for global/background preservation. This is a
+real tradeoff and one of the strongest reportable findings. This baseline is
+useful for comparison, but it is not our native DiffSplat latent method.
 
 ### 6.5 Initial Findings
 
@@ -447,9 +624,9 @@ scene-local reconstruction/domain adaptation.
 
 ## 10. Reproducibility State
 
-The local report was generated after fast-forwarding the local repository to
-GitHub/Zaratan `main` commit `c3e4f9a`. Local tests passed on that commit with
-only this report uncommitted.
+This report revision was prepared after fast-forwarding the local repository to
+the current GitHub/Zaratan `main` and then updating the prior report commit
+`bed1d9e`. Local tests passed with only this report revision uncommitted.
 
 The Zaratan working tree also contained additional uncommitted experimental
 changes and untracked tools at report time. The important committed artifacts
@@ -460,13 +637,44 @@ reconciled before final code submission. Notable dirty files included updates to
 `tools/run_gsrecon_export.py`, and `tools/train_masked_latent_denoiser.py`,
 plus untracked denoiser, diagnostics, and run scripts.
 
-## 11. AI Tool Usage Disclosure
+The figure paths in Section 6.4 were taken from the Zaratan-only Bag project
+memory files:
+
+- `project_memory/BAG_FULL_TECHNICAL_REPORT_2026-05-05.md`
+- `project_memory/BAG_PRESENTATION_DOC_2026-05-05.md`
+
+Those Bag files existed on Zaratan at report-update time but were not part of
+the local GitHub checkout. The image paths themselves were verified on Zaratan.
+
+## 11. Markdown Sources Consulted
+
+The report was revised after consulting the project Markdown files and using
+them as follows:
+
+| Source | Contribution to this report |
+| --- | --- |
+| `Project_Details.md` | Original research architecture: GSVAE mapping, SAM 3 masks, latent inversion, attention injection, rendering losses, and shadow-aware future directions. |
+| `sample_instructions.md` | Course deliverable expectations and tone for proposal/interim/final report style. |
+| `README.md` | Repository purpose, staged CLI, sync workflow, and project memory convention. |
+| `CLAUDE.md` | Adapter pattern, local versus Zaratan workflow, stage contracts, and engineering conventions. |
+| `docs/PIPELINE.md` | Geometry, GSRecon, SAM 3, latent inpaint, render diagnostics, and local patch contracts. |
+| `docs/NATIVE_DIFFSPLAT_LATENT_INPAINTING.md` | Native latent training objective, render diagnosis gates, local scene patches, and visual acceptance criteria. |
+| `docs/ZARATAN.md` | HPC paths, direct `srun` workflow, setup requirements, and known cluster constraints. |
+| `project_memory/CONTEXT.md` | Big-picture goal and current research scope. |
+| `project_memory/DECISIONS.md` | Design decisions: real scenes first, DiffSplat as encoder, SAM 3 masks, command adapters, direct H100 `srun`. |
+| `project_memory/PLAN.md` | Milestones, MVP acceptance criteria, artifact reduction, and fine-tuning plan. |
+| `project_memory/PROGRESS_AND_REMAINING.md` | Verified H100 MVP run, current working pieces, and remaining blockers. |
+| `project_memory/STATUS.md` | Visual baseline pivot, direct Zaratan updates, training/evaluation artifacts, failures, and next best steps. |
+| `project_memory/ZARATAN.md` | Zaratan paths, login workflow, setup commands, and heavy-job notes. |
+| `project_memory/BAG_FULL_TECHNICAL_REPORT_2026-05-05.md` | Bag baseline figure paths, 5k/20k metrics, 12k artifact-layout diagnosis, and safe claims. |
+| `project_memory/BAG_PRESENTATION_DOC_2026-05-05.md` | Presentation framing, figure checklist, and concise baseline/native-branch claims. |
+
+## 12. AI Tool Usage Disclosure
 
 OpenAI Codex/ChatGPT was used to brainstorm the project plan, write and revise
-code, debug runtime errors, coordinate the local-to-Zaratan workflow, and draft
-this report. The team is responsible for verifying the accuracy, completeness,
-and quality of all submitted code, results, citations, and presentation
-materials.
+code, debug runtime errors, coordinate the local-to-Zaratan workflow, inspect
+project artifacts, and draft this report. The team is responsible for verifying
+the accuracy, completeness, quality, and citations of all submitted work.
 
 ## References
 
