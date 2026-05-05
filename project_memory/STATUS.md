@@ -2,8 +2,126 @@
 
 Last updated: 2026-05-03
 
+## 2026-05-03 Visual Baseline Pivot Status
+
+- Verified a strong scene-level source reconstruction for the Inpaint360GS
+  `car` scene using vanilla 3DGS trained for `30000` iterations:
+  `runs/visual_baseline/car_3dgs/vanilla_30k_r8/`.
+- Rendered the trained 3DGS model on official Inpaint360GS inpaint cameras and
+  generated the current presentation artifact:
+  `runs/visual_baseline/car_3dgs/inpaint_view_30k_r8/render_void_target_comparison.png`.
+  The columns are true 3DGS source render, a 2D mask-applied void
+  visualization, and official object-free target frames. The target frames are
+  dataset ground truth, not generated inpainting.
+- Projection-only 3D Gaussian pruning was tested and rejected as a clean void
+  method:
+  - conservative pruning removed `52216 / 1688912` Gaussians and left a dark
+    car-shaped smear:
+    `runs/visual_baseline/car_3dgs/void_pruned_inpaint_view_30k_r8/render_void_target_comparison.png`.
+  - aggressive pruning removed `83877 / 1688912` Gaussians but still left a
+    larger dark smear:
+    `runs/visual_baseline/car_3dgs/void_pruned_aggressive_inpaint_view_30k_r8/render_void_target_comparison.png`.
+- The verified status manifest is
+  `runs/visual_baseline/car_3dgs/final_baseline_status.json`.
+- Current conclusion: the visual baseline now has a strong before/source 3DGS
+  render and a good object-free target reference. It does **not** yet have a
+  true generated 3D inpainted scene. Simple projected-mask pruning is not a
+  sufficient removal method; the next step is the actual Inpaint360GS
+  object-aware removal/inpaint stage, or an equivalent 3D object-label field,
+  before returning to native DiffSplat latent inpainting.
+
 ## 2026-05-03 Direct Zaratan Update
 
+- Added `tools/finetune_gsrecon_scene_patches.py` to fine-tune the actual
+  DiffSplat `GSRecon` model and renderer on latent_void scene-local patch
+  manifests, instead of only training lightweight scaffold adapters. The script
+  loads the pretrained `gsrecon_gobj265k_cnp_even4` checkpoint, supports
+  trainable modes for output heads / input embedder / full model, computes
+  render-space RGB, alpha, coordinate, and normal losses on local patch views,
+  saves an adapted checkpoint, and writes rendered prediction/target/diff sheets.
+- The A100 attached in tmux session `1` initially failed render-loss training
+  with `CUDA error: no kernel image is available for execution on the device`
+  because the installed RaDe-GS `diff_gaussian_rasterization` extension had
+  been compiled for H100-only `sm_90`. Rebuilt the extension in the active venv
+  with `TORCH_CUDA_ARCH_LIST=8.0;9.0`, which restored A100 rendering while
+  retaining H100 compatibility. Updated `scripts/setup_zaratan_deps.sh` to use
+  `8.0;9.0` by default for future installs.
+- Verified the first real A100 GSRecon fine-tune:
+  `runs/gsrecon_scene_patch_finetune_a100/heads_50_v3/`. It trained the
+  pretrained GSRecon output heads for `50` CUDA steps over the 11-scene
+  local-patch dataset; loss went from `0.1267421991` to `0.0995861590`, and
+  wrote visual render sheets under
+  `runs/gsrecon_scene_patch_finetune_a100/heads_50_v3/eval/`.
+- Completed the longer A100 run
+  `runs/gsrecon_scene_patch_finetune_a100/heads_embedder_500/`, training
+  GSRecon output heads plus the input embedder for `500` steps on the same
+  multi-scene local-patch data. The sampled step loss is noisy because each
+  step draws one scene patch, but the mean loss over the final 50 steps was
+  `0.0618686271` (mean RGB MSE `0.0388574837`, mean alpha MSE
+  `0.1042835884`). It saved
+  `gsrecon_scene_patch_finetuned.pt` and rendered sheets at steps 1/100/200/300/400/500
+  plus `eval/final_sheet.png`.
+- Added stronger research-style training controls to
+  `tools/finetune_gsrecon_scene_patches.py` after the early A100 renders stayed
+  weak: foreground L1, DSSIM-style structural loss, alpha BCE/Dice silhouette
+  losses, optional depth L1, fixed-validation intervals, early stopping, best
+  checkpoint saving, and `--sample-id-contains` for focused overfit tests.
+- Stopped two multi-scene A100 last-block experiments when fixed visuals did not
+  improve enough to justify waiting:
+  - `runs/gsrecon_scene_patch_finetune_a100/foreground_last2blocks_1500/` was
+    stopped around step 1300. It made objects more opaque but still smeared and
+    duplicated geometry.
+  - `runs/gsrecon_scene_patch_finetune_a100/research_loss_last2blocks_3000_v2/`
+    improved fixed validation only slightly (`1.4286 -> 1.3878`) and its
+    fixed-step sheets still showed the same structural failure.
+- Started the more diagnostic A100 run
+  `runs/gsrecon_scene_patch_finetune_a100/single_car_allparams_overfit/`, which
+  trains all GSRecon parameters on only `0001_car` with fixed validation every
+  200 steps. This is intentionally an overfit test: if one clean local patch
+  cannot become visually strong, the blocker is the scene-local camera/coordinate
+  contract or architecture, not dataset scale. By step 400, loss improved
+  `2.8973 -> 1.9265` and the render changed from almost blank to a recognizable
+  dark car-like blob, but still with duplicated/floating context.
+- Added a source-grid supervision variant (`--source-opacity-weight` and
+  `--source-rgb-weight`) to directly force GSRecon's predicted per-input-view
+  Gaussians to be transparent outside the object mask and RGB-consistent inside
+  it. The follow-up run
+  `runs/gsrecon_scene_patch_finetune_a100/single_car_source_mask_overfit/`
+  reduced source opacity/RGB losses, but the rendered side duplicate persisted.
+  This makes the next best experiment a camera/coordinate contract check using a
+  non-neural teacher Gaussian cloud rendered from the same patch RGB/depth/masks,
+  before spending more A100 time on GSRecon losses.
+- Added and ran `tools/diagnose_patch_teacher_render.py`, which bypasses
+  GSRecon and renders direct teacher Gaussians from a local patch manifest using
+  the same DiffSplat/RaDe-GS rasterizer. The A100 diagnostics for `0001_car`
+  are:
+  - `runs/teacher_render_diagnostics/car/coord_teacher_sheet.png`
+  - `runs/teacher_render_diagnostics/car/depth_teacher_sheet.png`
+  - `runs/teacher_render_diagnostics/car_source1/coord_teacher_sheet.png`
+  - `runs/teacher_render_diagnostics/car_source1/depth_teacher_sheet.png`
+  - `runs/teacher_render_diagnostics/car_source1_raw/coord_raw_teacher_sheet.png`
+  Even the single-source teacher cannot re-render its own target cleanly:
+  coordinate teachers have shifted/stretched silhouettes and side streaks, while
+  depth teachers render as misplaced blurred blobs. Raw coordinates do not fix
+  the issue. This confirms the immediate blocker is the local patch
+  camera/coordinate/depth rendering contract, not simply GSRecon loss choice or
+  training duration.
+- Pivoted to a no-training visual baseline after confirming native patch
+  rendering is blocked. Added `tools/create_visual_baseline_sheets.py` and
+  generated clear `car` scene sheets from the official Inpaint360GS dataset:
+  - `runs/visual_baseline/car/source_views.png` shows object-present source
+    images (`IMG_0001`-`IMG_0008`).
+  - `runs/visual_baseline/car/voided_views.png` overlays the official unseen
+    masks as black holes with red boundaries.
+  - `runs/visual_baseline/car/inpainted_views.png` shows the official
+    object-free/evaluation frames (`test_IMG_0102`-`test_IMG_0109`).
+  - `runs/visual_baseline/car/void_vs_inpainted.png` gives side-by-side void
+    versus object-free target comparisons.
+  - `runs/visual_baseline/car/baseline_status.json` records source/test image
+    paths and notes that this is a progress/debug baseline, not the native
+    DiffSplat latent method.
+  No precomputed Inpaint360GS 3DGS output model was present in the checkout, so
+  the baseline intentionally avoids launching another long reconstruction job.
 - Implemented the Scene-Local DiffSplat Training Plan scaffolding without
   editing the Cursor plan file:
   - `tools/build_scene_patch_dataset.py` builds multi-scene local patch datasets
@@ -100,6 +218,13 @@ Last updated: 2026-05-03
     Across `44` target pairs, mean weighted loss was `0.0480843608`, mean RGB
     MSE was `0.0165630163`, mean alpha MSE was `0.0400669282`, and mean depth
     L1 was `0.1175397943`.
+  - Visual inference sheets generated from saved CPU eval artifacts:
+    `runs/scene_patch_training_long/visual_eval/recon_adapter_pred_vs_target_sheet.png`
+    shows lightweight recon-adapter predicted RGB, target RGB, and absolute
+    difference for held-out patch targets; and
+    `runs/scene_patch_training_long/visual_eval/denoiser_latent_eval_sheet.png`
+    shows latent-space source/masked/predicted/error heatmaps for the trained
+    masked latent denoiser. The denoiser sheet is not a decoded scene render.
   - Slurm currently shows pending user jobs on `gpu-a100` and `gpu-h100` due to
     priority; no active attached H100 is available in tmux right now.
 - Downloaded the official GObjaverse `render_data_examples.zip` archive and ran

@@ -88,7 +88,7 @@ if [[ "${INSTALL_GPU_DEPS:-0}" == "1" ]]; then
   export MAX_JOBS="${MAX_JOBS:-4}"
   resolve_cuda_home
   echo "[cuda] CUDA_HOME=${CUDA_HOME:-unset}"
-  export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-9.0}"
+  export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.0;9.0}"
   python -m pip install --no-build-isolation external/DiffSplat/extensions/RaDe-GS/submodules/diff-gaussian-rasterization
 fi
 
