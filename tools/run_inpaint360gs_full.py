@@ -420,14 +420,22 @@ def stage_gs_inpaint(scene_data, scene_output, scene_name, resolution, inpaint_r
 
 
 def stage_evaluate(scene_output, inpaint_root, log_dir, skip_fid=False):
-    """Stage 11: Evaluation."""
-    cmd = [sys.executable, os.path.join(inpaint_root, "tools", "metrics_fid_masked.py"),
-           "-m", scene_output]
+    """Stage 11: Evaluation (bundled script, repo-root cwd for data/inpaint360 paths)."""
+    root = get_root()
+    script = os.path.join(root, "tools", "inpaint360gs_metrics_fid_masked.py")
+    env = os.environ.copy()
+    gs = os.path.join(inpaint_root, "gaussian_splatting")
+    _pp = [inpaint_root, gs]
+    if env.get("PYTHONPATH"):
+        _pp.append(env["PYTHONPATH"])
+    env["PYTHONPATH"] = os.pathsep.join(_pp)
+    cmd = [sys.executable, script, "-m", os.path.abspath(scene_output)]
     if skip_fid:
         cmd.append("--skip-fid")
     return run_cmd(
         cmd,
-        cwd=inpaint_root,
+        cwd=root,
+        env=env,
         log_path=os.path.join(log_dir, "evaluation.log"),
     ) == 0
 
