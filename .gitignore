@@ -16,6 +16,12 @@ outputs/
 data/
 checkpoints/
 external/
+# Exception: track evaluation patch for offline HPC nodes (rest of external/ ignored)
+!/external/Inpaint360GS/
+/external/Inpaint360GS/*
+!/external/Inpaint360GS/tools/
+/external/Inpaint360GS/tools/*
+!/external/Inpaint360GS/tools/metrics_fid_masked.py
 *.log
 *.out
 *.err
