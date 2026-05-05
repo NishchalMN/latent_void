@@ -533,46 +533,49 @@ def process_scene(scene_name, data_root, output_root, resolution, inpaint_root,
             status["elapsed_seconds"] = round(time.time() - t0, 1)
             return status
 
-    print(f"\n--- Stage 8b/11: Generate virtual view masks ---")
-    ok = stage_generate_virtual_masks(scene_data, scene_output, target_id)
-    status["stages"]["virtual_masks"] = "ok" if ok else "fail"
-    if not ok:
-        print(f"  FATAL: Virtual mask generation failed for {scene_name}", flush=True)
-        status["elapsed_seconds"] = round(time.time() - t0, 1)
-        return status
+    if start_stage <= 9:
+        print(f"\n--- Stage 8b/11: Generate virtual view masks ---")
+        ok = stage_generate_virtual_masks(scene_data, scene_output, target_id)
+        status["stages"]["virtual_masks"] = "ok" if ok else "fail"
+        if not ok:
+            print(f"  FATAL: Virtual mask generation failed for {scene_name}", flush=True)
+            status["elapsed_seconds"] = round(time.time() - t0, 1)
+            return status
 
-    print(f"\n--- Stage 9/11: LaMa inpainting ---")
-    ok = stage_prepare_lama(scene_data, scene_output, resolution, inpaint_root, log_dir)
-    status["stages"]["prepare_lama"] = "ok" if ok else "fail"
-    if not ok:
-        print(f"  FATAL: LaMa data prep failed for {scene_name}", flush=True)
-        status["elapsed_seconds"] = round(time.time() - t0, 1)
-        return status
+        print(f"\n--- Stage 9/11: LaMa inpainting ---")
+        ok = stage_prepare_lama(scene_data, scene_output, resolution, inpaint_root, log_dir)
+        status["stages"]["prepare_lama"] = "ok" if ok else "fail"
+        if not ok:
+            print(f"  FATAL: LaMa data prep failed for {scene_name}", flush=True)
+            status["elapsed_seconds"] = round(time.time() - t0, 1)
+            return status
 
-    ok = stage_lama_inpaint(scene_name, inpaint_root, log_dir)
-    status["stages"]["lama_inpaint"] = "ok" if ok else "fail"
-    if not ok:
-        print(f"  FATAL: LaMa inpaint failed for {scene_name}", flush=True)
-        status["elapsed_seconds"] = round(time.time() - t0, 1)
-        return status
+        ok = stage_lama_inpaint(scene_name, inpaint_root, log_dir)
+        status["stages"]["lama_inpaint"] = "ok" if ok else "fail"
+        if not ok:
+            print(f"  FATAL: LaMa inpaint failed for {scene_name}", flush=True)
+            status["elapsed_seconds"] = round(time.time() - t0, 1)
+            return status
 
-    ok = stage_postprocess_lama(scene_data, scene_output, resolution, inpaint_root, log_dir)
-    status["stages"]["postprocess_lama"] = "ok" if ok else "fail"
-    if not ok:
-        print(f"  FATAL: LaMa postprocess failed for {scene_name}", flush=True)
-        status["elapsed_seconds"] = round(time.time() - t0, 1)
-        return status
+        ok = stage_postprocess_lama(scene_data, scene_output, resolution, inpaint_root, log_dir)
+        status["stages"]["postprocess_lama"] = "ok" if ok else "fail"
+        if not ok:
+            print(f"  FATAL: LaMa postprocess failed for {scene_name}", flush=True)
+            status["elapsed_seconds"] = round(time.time() - t0, 1)
+            return status
 
-    print(f"\n--- Stage 10/11: 3D inpainting ---")
-    ok = stage_ply_fusion(scene_data, scene_output, scene_name, inpaint_root, log_dir)
-    status["stages"]["ply_fusion"] = "ok" if ok else "fail"
+    if start_stage <= 10:
+        print(f"\n--- Stage 10/11: 3D inpainting ---")
+        ok = stage_ply_fusion(scene_data, scene_output, scene_name, inpaint_root, log_dir)
+        status["stages"]["ply_fusion"] = "ok" if ok else "fail"
 
-    ok = stage_gs_inpaint(scene_data, scene_output, scene_name, resolution, inpaint_root, log_dir)
-    status["stages"]["gs_inpaint"] = "ok" if ok else "fail"
+        ok = stage_gs_inpaint(scene_data, scene_output, scene_name, resolution, inpaint_root, log_dir)
+        status["stages"]["gs_inpaint"] = "ok" if ok else "fail"
 
-    print(f"\n--- Stage 11/11: Evaluation ---")
-    ok = stage_evaluate(scene_output, inpaint_root, log_dir, skip_fid=skip_fid_eval)
-    status["stages"]["evaluation"] = "ok" if ok else "fail"
+    if start_stage <= 11:
+        print(f"\n--- Stage 11/11: Evaluation ---")
+        ok = stage_evaluate(scene_output, inpaint_root, log_dir, skip_fid=skip_fid_eval)
+        status["stages"]["evaluation"] = "ok" if ok else "fail"
 
     status["elapsed_seconds"] = round(time.time() - t0, 1)
     status_path = os.path.join(scene_output, "pipeline_status.json")
@@ -594,7 +597,7 @@ def main():
     parser.add_argument("--skip-sam", action="store_true",
                         help="Skip SAM + 3DGS training but re-run mask association and distillation")
     parser.add_argument("--start-stage", type=int, default=1,
-                        help="Start from this stage number (1-11), skip earlier stages")
+                        help="Start from this stage (1-11). 9=LaMa onward, 10=PLY+GS inpaint, 11=eval only")
     parser.add_argument("--skip-fid-eval", action="store_true",
                         help="Skip FID in metrics (offline GPU nodes); PSNR/SSIM/LPIPS still run")
     parser.add_argument("--data-root", default=None)
