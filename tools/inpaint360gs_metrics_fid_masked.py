@@ -222,8 +222,8 @@ def evaluate(model_paths, crop_ratio=1.0, resize=1.0, skip_fid=False):
             if fid_value is not None:
                 global_fid_full.append(fid_value)
 
-            target_dir = "/".join(scene_dir.split("/")[:3])
-            with open(f"{target_dir}/inpaint_evaluation_results.json", 'w') as fp:
+            eval_path = os.path.join(scene_dir, "inpaint_evaluation_results.json")
+            with open(eval_path, 'w') as fp:
                 json.dump(full_dict[test_dir_str], fp, indent=2)
 
     print("\n==================== Overall Average Metrics ====================")

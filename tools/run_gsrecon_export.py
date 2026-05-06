@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument("--tiny-vae-path", default="")
     parser.add_argument("--ckpt-iter", type=int, default=-1)
     parser.add_argument("--gsvae-ckpt-iter", type=int, default=-1)
+    parser.add_argument("--init-model-state", default="")
     parser.add_argument("--preflight-only", action="store_true")
     return parser.parse_args()
 
@@ -141,6 +142,27 @@ def _run_model(args, manifest):
     gsrecon = GSRecon(opt).requires_grad_(False).eval().to(device)
     gsvae = GSAutoencoderKL(opt).requires_grad_(False).eval().to(device)
     gsrecon = util.load_ckpt(_checkpoint_dir(args.weights), args.ckpt_iter, None, gsrecon)
+    if args.init_model_state:
+        state = torch.load(args.init_model_state, map_location="cpu")
+        if isinstance(state, dict):
+            if "model_state_dict" in state:
+                state = state["model_state_dict"]
+            elif "state_dict" in state:
+                state = state["state_dict"]
+        if not isinstance(state, dict):
+            raise RuntimeError("init model state must be a state_dict-like object: %s" % args.init_model_state)
+        missing, unexpected = gsrecon.load_state_dict(state, strict=False)
+        print(
+            json.dumps(
+                {
+                    "event": "loaded_init_model_state",
+                    "path": args.init_model_state,
+                    "missing_keys": len(missing),
+                    "unexpected_keys": len(unexpected),
+                }
+            ),
+            flush=True,
+        )
     gsvae = util.load_ckpt(_checkpoint_dir(args.gsvae_weights), args.gsvae_ckpt_iter, None, gsvae)
     tensors = _load_scene_tensors(manifest, torch, device, opt.num_input_views)
     input_images = tensors["input_images"].float()
@@ -227,6 +249,8 @@ def main():
         for label, path in [("diffsplat_root", args.diffsplat_root), ("weights", args.weights), ("gsvae_weights", args.gsvae_weights)]:
             if not os.path.exists(path):
                 raise RuntimeError("%s does not exist: %s" % (label, path))
+        if args.init_model_state and not os.path.exists(args.init_model_state):
+            raise RuntimeError("init_model_state does not exist: %s" % args.init_model_state)
         validate_aux_model_paths(args.sdxl_vae_path, args.tiny_vae_path)
         preflight.update({"ok": True, "num_geometry_views": len(manifest["views"])})
         if args.preflight_only:

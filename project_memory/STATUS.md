@@ -1,6 +1,65 @@
 # Status
 
-Last updated: 2026-05-03
+Last updated: 2026-05-06
+
+## 2026-05-06 Inpaint360GS `bag`: virtual fusion + depth alignment verified
+
+- Documented the working post-LaMa workflow (affine align completed depth to renderer depth,
+  then planar masked depth using hole-depth ring), optional virtual-mask cleanup,
+  fusion `c2w` from `world_view_transform`, and auto / CLI `supp_ply` selection for inpaint:
+  **`project_memory/INPAINT360GS_BAG_VIRTUAL_DEPTH_FUSION_RECIPE.md`**
+- Added tools: `tools/inpaint360_align_completed_depth.py`,
+  `tools/inpaint360_project_completed_to_hole_plane.py`,
+  `tools/inpaint360_filter_virtual_masks.py` (already had `inpaint360_repair_virtual_depth.py`).
+- Modified upstream adapters: `external/Inpaint360GS/edit_object_removal_plyfusion.py`
+  (`--legacy_pose_rt` for comparison), `external/Inpaint360GS/edit_object_inpaint.py`
+  (`auto_select_support_ply`, `--supp_ply`).
+
+## 2026-05-05 Gate-A Recovery Execution Plan Started
+
+- After confirming Track B ran end-to-end but produced poor source diagnostics
+  (clean baseline Inpaint360GS render vs noisy `direct_gs_grid`), the active
+  focus changed to source reconstruction quality gates before further inpainting.
+- Added executable sweep script:
+  `scripts/run_gateA_recovery_sweep.sh`.
+  It runs three `bag`-focused GSRecon local-patch adaptation jobs with fixed
+  diagnostics:
+  - `trainable=heads`
+  - `trainable=heads_and_embed`
+  - `trainable=last_blocks` (2 blocks)
+- Each run is constrained to 500 steps with fixed eval every 100 steps to make
+  fast go/no-go decisions and avoid long unproductive training.
+- Outputs will be written under `runs/source_recovery/` with per-run logs and
+  eval artifacts; only runs that improve Gate A visuals should be promoted.
+- Promoted checkpoint support was added to `tools/run_gsrecon_export.py` via
+  `--init-model-state` so Gate-A winners can be injected into standard export
+  and compared with the same staged diagnostics tools.
+- Added `scripts/run_promoted_bag_diagnostics.sh` to run export + staged
+  diagnostics for the current best `bag` checkpoint
+  (`bag_last_blocks_500/gsrecon_scene_patch_finetuned.pt`).
+
+## 2026-05-05 Inpaint360GS `bag` Eval Recovery (tmux 0)
+
+- Re-ran Stage 11 evaluation for `bag` with offline-safe settings
+  (`--skip-fid-eval`) after fixing the result write path in
+  `tools/inpaint360gs_metrics_fid_masked.py` (write under `scene_dir` instead
+  of `/scratch/zt1`).
+- Final run completed with `bag: ALL STAGES OK` and
+  `pipeline_status.json` stage `evaluation: ok`.
+- Runtime for eval-only stage: `397.8s`.
+- Metrics in `output/inpaint360/bag/inpaint_evaluation_results.json`:
+  - `SSIM_masked=0.9803727269`
+  - `PSNR_masked=26.2941284180`
+  - `LPIPS_masked=0.0149063086`
+  - `SSIM_nonmasked=0.7909024358`
+  - `PSNR_nonmasked=25.6700267792`
+  - `LPIPS_nonmasked=0.2281893641`
+  - `SSIM_full=0.7729948759`
+  - `PSNR_full=22.8350257874`
+  - `LPIPS_full=0.2442328781`
+  - `FID=null` (intentionally skipped offline)
+- Output summary also written to
+  `output/inpaint360/all_scene_evaluation_results.json`.
 
 ## 2026-05-03 Visual Baseline Pivot Status
 
