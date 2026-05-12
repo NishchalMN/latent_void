@@ -13,12 +13,16 @@ dist/
 # Local runs and heavyweight artifacts
 runs/
 outputs/
+output/
 data/
 checkpoints/
 external/
 *.log
 *.out
 *.err
+*.zip
+*.pdf
+submission/
 
 # HPC/editor noise
 .DS_Store

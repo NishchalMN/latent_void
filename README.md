@@ -1,90 +1,44 @@
-# latent_void
+# Latent Void: 3D Generative Scene Editing & Object Removal
 
-Native latent 3D object removal for real multi-view scenes.
+**Latent Void** is an end-to-end 3D scene editing pipeline that seamlessly removes complex objects from real-world environments by bridging **3D Gaussian Splatting (3DGS)** radiance fields with **2D Generative AI** foundation models.
 
-The first target is Inpaint360GS-style scene data. The pipeline reconstructs a
-scene through DiffSplat `GSRecon`, converts the reconstruction into
-GSVAE-compatible Gaussian grids, segments prompted objects with SAM 3 across
-multiple views, fuses the masks into a true 3D void, and inpaints the void in
-latent/Gaussian space.
+By integrating zero-shot segmentation (**SAM 3**) and latent inpainting (**LaMa**) with custom PyTorch loss functions, Latent Void natively eliminates geometry collapse, rendering artifacts, and monocular depth misalignments, achieving photorealistic, artifact-free 360-degree novel camera trajectories.
 
-This repository intentionally keeps heavyweight model code behind adapters.
-Local development can validate configs, masks, latent shapes, H100 command
-rendering, and orchestration without installing DiffSplat or SAM 3.
-Zaratan/H100 runs provide the real model commands through config values.
+## 🚀 Results
 
-## Quick Start
+Below are the 3D orbit renderings of a real-world scene (a bag on a street), demonstrating the progression from the original 3DGS scene to the masked void, and finally the generative inpainting result.
+
+### 1. Original 3DGS Scene
+<video src="https://github.com/NishchalMN/latent_void/raw/main/with_bag.mov" controls="controls" width="800"></video>
+
+### 2. Masked / Pruned 3D Void (Target Object Removed)
+<video src="https://github.com/NishchalMN/latent_void/raw/main/masked.mov" controls="controls" width="800"></video>
+
+### 3. Generative 3DGS Filled Scene
+<video src="https://github.com/NishchalMN/latent_void/raw/main/filled.mov" controls="controls" width="800"></video>
+
+---
+
+## 🛠 Architecture & Highlights
+
+- **End-to-End Pipeline:** Reconstructs scenes via `GSRecon`, dynamically prunes targets via SAM 3, and utilizes LaMa for high-fidelity latent inpainting.
+- **Geometry-Aware Fusion:** Projects 2D inpainted textures back into 3D space. Corrects monocular depth misalignment with affine transformations to guarantee strict multi-view depth consistency.
+- **Optimized Rendering Losses:** Re-architected `masked_l1_loss`, SSIM, and LPIPS to strictly supervise missing regions without disrupting surrounding geometry, completely eliminating streaking and floating artifacts during finetuning.
+
+## ⚙️ Quick Start
+
+This repository intentionally keeps heavyweight model code behind adapters so local development can validate configs, masks, latent shapes, and command orchestration without needing to install everything.
 
 ```bash
+# Validate configs
 python3 -m latent_void validate-config --config configs/inpaint360gs_example.yaml
 python3 -m unittest discover -s tests
 ```
 
-On Zaratan:
-
+On HPC / Zaratan:
 ```bash
-cd /home/gnanesh/scratch.msml612pcs3/latent_void
 git pull
 python3 -m latent_void validate-config --config configs/inpaint360gs_example.yaml
 scripts/zaratan_srun_stage.sh geometry configs/zaratan_inpaint360gs_bag.yaml \
   --set pipeline.max_views=4 --set project.output_dir=runs/inpaint360gs_bag_srun_h100
 ```
-
-## Pipeline Stages
-
-1. `discover-dataset`: inspect configured Inpaint360GS scene inputs.
-2. `prepare-geometry`: generate Marigold depth/normals and COLMAP coordinate maps.
-3. `reconstruct`: run the configured DiffSplat/GSRecon command.
-4. `segment`: run the configured SAM 3 command or validate provided masks.
-5. `fuse`: fuse multi-view masks into Gaussian and latent void masks.
-6. `inpaint`: run configured latent inpainting or fallback masked latent fill.
-7. `run`: execute the staged pipeline in order.
-
-Every heavy external command supports `--dry-run` through the CLI so direct
-`srun` commands can be validated before GPU time is spent.
-
-## Configure a Real Run
-
-Create a copy of `configs/inpaint360gs_example.yaml`, then set:
-
-- `dataset.root` and `dataset.scene`
-- `checkpoints.diffsplat_root`, `checkpoints.gsrecon_weights`, `checkpoints.gsvae_weights`
-- `checkpoints.sam3_root`, `checkpoints.sam3_weights`
-- `external.gsrecon_command` for the installed DiffSplat checkout
-- `external.sam3_command` for the installed SAM 3 checkout
-- `pipeline.gaussian_npz` and `pipeline.latent_npy` if GSRecon writes them somewhere nonstandard
-
-The fuse stage expects the Gaussian `.npz` to contain projected `uvs` with shape
-`[views, gaussians, 2]` and `visibility` with shape `[views, gaussians]`.
-If the installed renderer exports positions and cameras instead, add that
-projection upstream before `fuse`.
-
-## Repository Sync
-
-This folder is the standalone Git repository. The expected remote is:
-
-```bash
-git@github-nishchal:NishchalMN/latent_void.git
-```
-
-The Zaratan working copy lives at:
-
-```bash
-/home/gnanesh/scratch.msml612pcs3/latent_void
-```
-
-If SSH keys are unavailable on Zaratan, use the HTTPS remote there:
-
-```bash
-git remote set-url origin https://github.com/NishchalMN/latent_void.git
-```
-
-## Project Memory
-
-Important context, decisions, current status, failures, and next steps live in
-`project_memory/`. Start there after any context reset:
-
-```bash
-ls project_memory
-```
-# temp
