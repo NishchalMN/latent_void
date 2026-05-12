@@ -91,6 +91,30 @@ class PipelineTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp)
 
+    def test_latent_inpaint_masked_denoiser_formats_weights_and_steps(self):
+        tmp = tempfile.mkdtemp()
+        try:
+            w = "/path/to/masked_latent_denoiser.pt"
+            config = {
+                "project": {"output_dir": tmp},
+                "dataset": {"type": "inpaint360gs", "root": tmp, "scene": "scene"},
+                "checkpoints": {"latent_inpaint_weights": w},
+                "pipeline": {"latent_inpaint_iterations": 12},
+                "external": {
+                    "latent_inpaint_command": (
+                        "python tools/inpaint_latent_masked_denoiser.py "
+                        "--weights {latent_inpaint_weights} "
+                        "--latent-path {latent_path} --mask-path {mask_path} "
+                        "--output-path {output_path} --refine-steps {latent_inpaint_iterations}"
+                    )
+                },
+            }
+            result = run_latent_inpaint(config, dry_run=True)
+            self.assertIn("--weights %s" % w, result["command"])
+            self.assertIn("--refine-steps 12", result["command"])
+        finally:
+            shutil.rmtree(tmp)
+
 
 if __name__ == "__main__":
     unittest.main()

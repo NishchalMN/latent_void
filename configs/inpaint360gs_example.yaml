@@ -75,12 +75,21 @@ external:
     --prompt "{prompt}"
     --output-dir {mask_dir}
     --resize-to {mask_resize}
+  # Harmonic context fill (CPU-friendly, no checkpoint):
   latent_inpaint_command: >-
     python tools/inpaint_latent_context.py
     --latent-path {latent_path}
     --mask-path {mask_path}
     --output-path {output_path}
     --iterations {latent_inpaint_iterations}
+  # Learned void fill (requires checkpoints.latent_inpaint_weights; GPU):
+  # latent_inpaint_command: >-
+  #   python tools/inpaint_latent_masked_denoiser.py
+  #   --weights {latent_inpaint_weights}
+  #   --latent-path {latent_path}
+  #   --mask-path {mask_path}
+  #   --output-path {output_path}
+  #   --refine-steps {latent_inpaint_iterations}
   render_command: >-
     python tools/render_latent_scene.py
     --diffsplat-root {diffsplat_root}

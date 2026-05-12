@@ -74,7 +74,21 @@ def apply_mask(img_tensor, mask_array):
     return img_tensor * mask
 
 
-def evaluate(model_paths, crop_ratio=1.0, resize=1.0, skip_fid=False):
+def evaluate(
+    model_paths,
+    crop_ratio=1.0,
+    resize=1.0,
+    skip_fid=False,
+    aggregate_across_runs=False,
+    eval_only_subdir=None,
+):
+    """Evaluate each inpaint output folder separately.
+
+    Per-folder metrics are always written under ``per_inpaint_folder`` in each scene's
+    ``inpaint_evaluation_results.json``. Pooling metrics across different inpaint runs
+    (e.g. iteration_5000 vs iteration_12000) is misleading; it is **off** unless
+    ``aggregate_across_runs=True``.
+    """
 
     for scene_dir in model_paths:
         if not Path(scene_dir).exists():
@@ -97,7 +111,22 @@ def evaluate(model_paths, crop_ratio=1.0, resize=1.0, skip_fid=False):
             for iter in os.listdir(os.path.join(inpaint_dir, method)):
                 waiting_eval_list.append(os.path.join(inpaint_dir, method, iter))
 
+        if eval_only_subdir:
+            before = len(waiting_eval_list)
+            waiting_eval_list = [
+                p for p in waiting_eval_list if Path(p).name == eval_only_subdir
+            ]
+            print(
+                f"\n    --eval-only-subdir {eval_only_subdir!r}: "
+                f"{before} -> {len(waiting_eval_list)} folder(s)"
+            )
+            if not waiting_eval_list:
+                raise SystemExit(
+                    f"No inpaint folder basename matches {eval_only_subdir!r} under {inpaint_dir}"
+                )
+
         print(f"\n    Waiting_eval_list is {waiting_eval_list}")
+        scene_run_metrics = {}
         for test_dir in waiting_eval_list:
 
             print("\nScene:", scene_dir)
@@ -208,57 +237,104 @@ def evaluate(model_paths, crop_ratio=1.0, resize=1.0, skip_fid=False):
                     print(f"    FID: skipped (download/offline or error: {type(ex).__name__}: {ex})")
             full_dict[test_dir_str]["FID"] = fid_value
 
-            global_ssims_masked.extend(ssims_masked)
-            global_psnrs_masked.extend(psnrs_masked)
-            global_lpipss_masked.extend(lpipss_masked)
+            scene_run_metrics[test_dir_str] = dict(full_dict[test_dir_str])
 
-            global_ssims_nonmasked.extend(ssims_nonmasked)
-            global_psnrs_nonmasked.extend(psnrs_nonmasked)
-            global_lpipss_nonmasked.extend(lpipss_nonmasked)
+            if aggregate_across_runs:
+                global_ssims_masked.extend(ssims_masked)
+                global_psnrs_masked.extend(psnrs_masked)
+                global_lpipss_masked.extend(lpipss_masked)
 
-            global_ssims_full.extend(ssims_full)
-            global_psnrs_full.extend(psnrs_full)
-            global_lpipss_full.extend(lpipss_full)
-            if fid_value is not None:
-                global_fid_full.append(fid_value)
+                global_ssims_nonmasked.extend(ssims_nonmasked)
+                global_psnrs_nonmasked.extend(psnrs_nonmasked)
+                global_lpipss_nonmasked.extend(lpipss_nonmasked)
 
-            target_dir = "/".join(scene_dir.split("/")[:3])
-            with open(f"{target_dir}/inpaint_evaluation_results.json", 'w') as fp:
-                json.dump(full_dict[test_dir_str], fp, indent=2)
+                global_ssims_full.extend(ssims_full)
+                global_psnrs_full.extend(psnrs_full)
+                global_lpipss_full.extend(lpipss_full)
+                if fid_value is not None:
+                    global_fid_full.append(fid_value)
 
-    print("\n==================== Overall Average Metrics ====================")
-    print("  SSIM (masked):      ", float(torch.tensor(global_ssims_masked).mean()) if global_ssims_masked else "N/A")
-    print("  PSNR (masked):      ", float(torch.tensor(global_psnrs_masked).mean()) if global_psnrs_masked else "N/A")
-    print("  LPIPS (masked):     ", float(torch.tensor(global_lpipss_masked).mean()) if global_lpipss_masked else "N/A")
-    print("  SSIM (non-masked):  ", float(torch.tensor(global_ssims_nonmasked).mean()) if global_ssims_nonmasked else "N/A")
-    print("  PSNR (non-masked):  ", float(torch.tensor(global_psnrs_nonmasked).mean()) if global_psnrs_nonmasked else "N/A")
-    print("  LPIPS (non-masked): ", float(torch.tensor(global_lpipss_nonmasked).mean()) if global_lpipss_nonmasked else "N/A")
-    print("  SSIM (full):        ", float(torch.tensor(global_ssims_full).mean()) if global_ssims_full else "N/A")
-    print("  PSNR (full):        ", float(torch.tensor(global_psnrs_full).mean()) if global_psnrs_full else "N/A")
-    print("  LPIPS (full):       ", float(torch.tensor(global_lpipss_full).mean()) if global_lpipss_full else "N/A")
-    print("  FID_full:           ", float(torch.tensor(global_fid_full).mean()) if global_fid_full else "N/A")
+        eval_path = os.path.join(scene_dir, "inpaint_evaluation_results.json")
+        scene_payload = {
+            "scene_output_dir": scene_dir,
+            "per_inpaint_folder": scene_run_metrics,
+        }
+        if aggregate_across_runs and scene_run_metrics:
+            # Mean of per-folder summary metrics (not per-image pooled across folders).
+            pm, pmz, plm = [], [], []
+            pnm, pnz, plnm = [], [], []
+            pf, pfz, plf = [], [], []
+            pfid = []
+            for _path, m in scene_run_metrics.items():
+                pm.append(m["SSIM_masked"])
+                pmz.append(m["PSNR_masked"])
+                plm.append(m["LPIPS_masked"])
+                pnm.append(m["SSIM_nonmasked"])
+                pnz.append(m["PSNR_nonmasked"])
+                plnm.append(m["LPIPS_nonmasked"])
+                pf.append(m["SSIM_full"])
+                pfz.append(m["PSNR_full"])
+                plf.append(m["LPIPS_full"])
+                fv = m.get("FID")
+                if fv is not None:
+                    pfid.append(fv)
+            scene_payload["mean_over_inpaint_folders"] = {
+                "SSIM_masked": float(np.nanmean(pm)) if pm else None,
+                "PSNR_masked": float(np.nanmean(pmz)) if pmz else None,
+                "LPIPS_masked": float(np.nanmean(plm)) if plm else None,
+                "SSIM_nonmasked": float(np.nanmean(pnm)) if pnm else None,
+                "PSNR_nonmasked": float(np.nanmean(pnz)) if pnz else None,
+                "LPIPS_nonmasked": float(np.nanmean(plnm)) if plnm else None,
+                "SSIM_full": float(np.nanmean(pf)) if pf else None,
+                "PSNR_full": float(np.nanmean(pfz)) if pfz else None,
+                "LPIPS_full": float(np.nanmean(plf)) if plf else None,
+                "FID_full": float(np.mean(pfid)) if pfid else None,
+            }
+
+        with open(eval_path, "w") as fp:
+            json.dump(scene_payload, fp, indent=2)
+        print(f"\n✅ Wrote per-folder metrics for this scene to {eval_path}")
+
+    if aggregate_across_runs:
+        print("\n==================== Overall Average Metrics (all runs pooled) ====================")
+        print("  SSIM (masked):      ", float(torch.tensor(global_ssims_masked).mean()) if global_ssims_masked else "N/A")
+        print("  PSNR (masked):      ", float(torch.tensor(global_psnrs_masked).mean()) if global_psnrs_masked else "N/A")
+        print("  LPIPS (masked):     ", float(torch.tensor(global_lpipss_masked).mean()) if global_lpipss_masked else "N/A")
+        print("  SSIM (non-masked):  ", float(torch.tensor(global_ssims_nonmasked).mean()) if global_ssims_nonmasked else "N/A")
+        print("  PSNR (non-masked):  ", float(torch.tensor(global_psnrs_nonmasked).mean()) if global_ssims_nonmasked else "N/A")
+        print("  LPIPS (non-masked): ", float(torch.tensor(global_lpipss_nonmasked).mean()) if global_lpipss_nonmasked else "N/A")
+        print("  SSIM (full):        ", float(torch.tensor(global_ssims_full).mean()) if global_ssims_full else "N/A")
+        print("  PSNR (full):        ", float(torch.tensor(global_psnrs_full).mean()) if global_ssims_full else "N/A")
+        print("  LPIPS (full):       ", float(torch.tensor(global_lpipss_full).mean()) if global_ssims_full else "N/A")
+        print("  FID_full:           ", float(torch.tensor(global_fid_full).mean()) if global_fid_full else "N/A")
+    else:
+        print("\n(Skipped pooled 'overall average' across inpaint folders; use --aggregate-across-runs if you want it.)")
 
     all_results = {
-        "per_scene_results": full_dict,
-        "overall_average": {
-            "SSIM_masked":      float(torch.tensor(global_ssims_masked).mean()) if global_ssims_masked else None,
-            "PSNR_masked":      float(torch.tensor(global_psnrs_masked).mean()) if global_psnrs_masked else None,
-            "LPIPS_masked":     float(torch.tensor(global_lpipss_masked).mean()) if global_lpipss_masked else None,
-            "SSIM_nonmasked":   float(torch.tensor(global_ssims_nonmasked).mean()) if global_ssims_nonmasked else None,
-            "PSNR_nonmasked":   float(torch.tensor(global_psnrs_nonmasked).mean()) if global_psnrs_nonmasked else None,
-            "LPIPS_nonmasked":  float(torch.tensor(global_lpipss_nonmasked).mean()) if global_lpipss_nonmasked else None,
-            "SSIM_full":        float(torch.tensor(global_ssims_full).mean()) if global_ssims_full else None,
-            "PSNR_full":        float(torch.tensor(global_psnrs_full).mean()) if global_psnrs_full else None,
-            "LPIPS_full":       float(torch.tensor(global_lpipss_full).mean()) if global_lpipss_full else None,
-            "FID_full":         float(np.mean(global_fid_full)) if global_fid_full else None
-        }
+        "per_scene_folder_results": full_dict,
+        "overall_average_pooled_per_image_across_runs": (
+            {
+                "SSIM_masked": float(torch.tensor(global_ssims_masked).mean()) if global_ssims_masked else None,
+                "PSNR_masked": float(torch.tensor(global_psnrs_masked).mean()) if global_psnrs_masked else None,
+                "LPIPS_masked": float(torch.tensor(global_lpipss_masked).mean()) if global_lpipss_masked else None,
+                "SSIM_nonmasked": float(torch.tensor(global_ssims_nonmasked).mean()) if global_ssims_nonmasked else None,
+                "PSNR_nonmasked": float(torch.tensor(global_psnrs_nonmasked).mean()) if global_ssims_nonmasked else None,
+                "LPIPS_nonmasked": float(torch.tensor(global_lpipss_nonmasked).mean()) if global_ssims_nonmasked else None,
+                "SSIM_full": float(torch.tensor(global_ssims_full).mean()) if global_ssims_full else None,
+                "PSNR_full": float(torch.tensor(global_psnrs_full).mean()) if global_ssims_full else None,
+                "LPIPS_full": float(torch.tensor(global_lpipss_full).mean()) if global_ssims_full else None,
+                "FID_full": float(np.mean(global_fid_full)) if global_fid_full else None,
+            }
+            if aggregate_across_runs
+            else None
+        ),
     }
 
     mean_result_path = "output/inpaint360/all_scene_evaluation_results.json"
     with open(mean_result_path, "w") as f:
         json.dump(all_results, f, indent=2)
 
-    print(f"✅ Saved full results to {mean_result_path}")
+    print(f"✅ Saved combined results to {mean_result_path}")
 
 
 if __name__ == "__main__":
@@ -271,6 +347,24 @@ if __name__ == "__main__":
     parser.add_argument('--resize', type=float, default=1.0, help='resize image for evalution')
     parser.add_argument('--skip-fid', action='store_true',
                         help='Skip FID (use on offline compute nodes; pre-download Inception weights on login)')
+    parser.add_argument(
+        '--aggregate-across-runs',
+        action='store_true',
+        help='Pool per-view metrics across all inpaint folders (misleading when folders are different budgets)',
+    )
+    parser.add_argument(
+        '--eval-only-subdir',
+        type=str,
+        default=None,
+        help='Only evaluate folders whose basename equals this (e.g. iteration_8000)',
+    )
     args = parser.parse_args()
 
-    evaluate(args.model_paths, crop_ratio=args.crop, resize=args.resize, skip_fid=args.skip_fid)
+    evaluate(
+        args.model_paths,
+        crop_ratio=args.crop,
+        resize=args.resize,
+        skip_fid=args.skip_fid,
+        aggregate_across_runs=args.aggregate_across_runs,
+        eval_only_subdir=args.eval_only_subdir,
+    )

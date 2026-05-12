@@ -1,0 +1,77 @@
+project:
+  name: latent_void_inpaint360gs_bag
+  output_dir: runs/inpaint360gs_bag
+  device: cuda
+  seed: 1234
+dataset:
+  type: inpaint360gs
+  root: data/inpaint360
+  scene: bag
+  images_glob: images/*.{JPG,jpg,jpeg,png}
+  masks_glob: masks/*.{npy,png,jpg,jpeg}
+  cameras_path: sparse/0
+prompts:
+  object: bag
+  shadow: ''
+  include_shadow: false
+checkpoints:
+  diffsplat_root: external/DiffSplat
+  gsrecon_weights: checkpoints/diffsplat/gsrecon_gobj265k_cnp_even4
+  gsvae_weights: checkpoints/diffsplat/gsvae_gobj265k_sdxl_fp16
+  sdxl_vae_path: checkpoints/diffsplat_aux/sdxl-vae-fp16-fix
+  tiny_vae_path: checkpoints/diffsplat_aux/taesdxl
+  sam3_root: external/sam3
+  sam3_weights: checkpoints/sam3/sam3.pt
+  latent_inpaint_weights: runs/native_latent_bag_train_v1/h100_train_8000/masked_latent_denoiser.pt
+geometry:
+  input_res: 256
+  device: cuda
+  preprocessing_profile: diffsplat_gobjaverse
+  white_background: true
+  depth_model: checkpoints/marigold/depth-v1-1
+  normal_model: checkpoints/marigold/normals-v1-1
+  num_inference_steps: 4
+  ensemble_size: 1
+  depth_scale: 5.0
+  normalize_cameras: true
+  camera_norm_radius: 1.4
+  camera_reference_index: 0
+  coord_mode: diffsplat
+pipeline:
+  max_views: 16
+  mask_threshold: 0.55
+  mask_score_threshold: 0.0
+  mask_min_area: 0
+  mask_max_area_fraction: 1.0
+  mask_erode_pixels: 0
+  mask_dilate_pixels: 0
+  latent_downsample: 8
+  latent_inpaint_iterations: 64
+  gaussian_npz: ''
+  latent_npy: ''
+  mask_source: auto
+  allow_fallback_inpaint: false
+external:
+  geometry_command: python tools/preprocess_geometry.py --config {config_path} --output-dir
+    {geometry_dir} --max-views {max_views}
+  gsrecon_command: python tools/run_gsrecon_export.py --diffsplat-root {diffsplat_root}
+    --weights {gsrecon_weights} --gsvae-weights {gsvae_weights} --sdxl-vae-path {sdxl_vae_path}
+    --tiny-vae-path {tiny_vae_path} --dataset-root {dataset_root} --scene {scene_id}
+    --geometry-manifest {geometry_manifest} --output-dir {gsrecon_dir}
+  sam3_command: python tools/run_sam3_multiview.py --sam3-root {sam3_root} --checkpoint-path
+    {sam3_weights} --manifest {manifest_path} --prompt "{prompt}" --output-dir {mask_dir}
+    --resize-to {mask_resize}
+  latent_inpaint_command: python tools/inpaint_latent_masked_denoiser.py --weights
+    {latent_inpaint_weights} --latent-path {latent_path} --mask-path {mask_path} --output-path
+    {output_path} --refine-steps {latent_inpaint_iterations}
+  render_command: python tools/render_latent_scene.py --diffsplat-root {diffsplat_root}
+    --gsvae-weights {gsvae_weights} --sdxl-vae-path {sdxl_vae_path} --tiny-vae-path
+    {tiny_vae_path} --gaussian-npz {gaussian_npz} --latent-path {latent_path} --compare-latent-path
+    {inpainted_latent_path} --output-dir {render_dir}
+hpc:
+  account: msml612pcs3-class
+  partition: gpu-h100
+  gres: gpu:h100:1
+  time: 02:00:00
+  cpus_per_task: 8
+  mem: 64G

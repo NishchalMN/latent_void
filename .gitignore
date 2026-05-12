@@ -25,3 +25,8 @@ external/
 .vscode/
 .idea/
 slurm-*.out
+
+output/
+*.zip
+*.pdf
+submission/

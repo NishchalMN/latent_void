@@ -5,6 +5,9 @@ Usage (on GPU node with venv activated):
     export PYTHONPATH=external/Inpaint360GS:external/Inpaint360GS/gaussian_splatting:$PYTHONPATH
     python tools/run_inpaint360gs_full.py --scenes car bag --resolution 2
 
+    # One scene, three 3D inpaint budgets (after LaMa / fusion, runs edit_object_inpaint per value):
+    python tools/run_inpaint360gs_full.py --scenes car --finetune-iterations 5000 12000 20000
+
 Stages:
   1. Train vanilla 3DGS (30k iterations)
   2. HQ-SAM 2D segmentation
@@ -315,11 +318,15 @@ def stage_generate_virtual_masks(scene_data, scene_output, target_id):
     mask_dir = os.path.join(scene_data, "inpaint_2d_unseen_mask_virtual")
     os.makedirs(mask_dir, exist_ok=True)
 
+    target_ids = target_id if isinstance(target_id, list) else [target_id]
+    
+    if os.path.isdir(mask_dir) and len(os.listdir(mask_dir)) > 0:
+        print(f"  Using existing virtual masks in {mask_dir}", flush=True)
+        return True
+
     if not os.path.isdir(objects_pred_dir):
         print(f"  ERROR: objects_pred dir not found: {objects_pred_dir}", flush=True)
         return False
-
-    target_ids = target_id if isinstance(target_id, list) else [target_id]
     count = 0
     for fname in sorted(os.listdir(objects_pred_dir)):
         if not fname.endswith(".png"):
@@ -407,16 +414,39 @@ def stage_ply_fusion(scene_data, scene_output, scene_name, inpaint_root, log_dir
 def stage_gs_inpaint(scene_data, scene_output, scene_name, resolution, inpaint_root, log_dir):
     """Stage 10b: 3DGS inpainting optimization."""
     config_file = os.path.join(inpaint_root, "config", "object_inpaint", "inpaint360", f"{scene_name}.json")
+    cmd = [
+        sys.executable, os.path.join(inpaint_root, "edit_object_inpaint.py"),
+        "-s", scene_data,
+        "-m", scene_output,
+        "--config_file", config_file,
+        "--resolution", str(resolution),
+        "--render_video",
+    ]
+    ck = os.environ.get("INPAINT360_CHECKPOINT_VIDEO_ITERS", "").strip()
+    if ck:
+        cmd.append("--checkpoint-video-iters")
+        cmd.extend(ck.split())
     return run_cmd(
-        [sys.executable, os.path.join(inpaint_root, "edit_object_inpaint.py"),
-         "-s", scene_data,
-         "-m", scene_output,
-         "--config_file", config_file,
-         "--resolution", str(resolution),
-         "--render_video"],
+        cmd,
         cwd=inpaint_root,
         log_path=os.path.join(log_dir, "gs_inpaint.log"),
     ) == 0
+
+
+def patch_object_inpaint_finetune_iteration(inpaint_root, scene_name, finetune_iteration):
+    """Set finetune_iteration in object_inpaint JSON (stage 10b reads this)."""
+    cfg_path = os.path.join(
+        inpaint_root, "config", "object_inpaint", "inpaint360", f"{scene_name}.json")
+    if not os.path.isfile(cfg_path):
+        print(f"  ERROR: missing object_inpaint config: {cfg_path}", flush=True)
+        return False
+    with open(cfg_path) as f:
+        cfg = json.load(f)
+    cfg["finetune_iteration"] = int(finetune_iteration)
+    with open(cfg_path, "w") as f:
+        json.dump(cfg, f, indent=4)
+    print(f"  Patched {cfg_path} -> finetune_iteration={finetune_iteration}", flush=True)
+    return True
 
 
 def stage_evaluate(scene_output, inpaint_root, log_dir, skip_fid=False):
@@ -440,9 +470,25 @@ def stage_evaluate(scene_output, inpaint_root, log_dir, skip_fid=False):
     ) == 0
 
 
+def _write_pipeline_status(status, scene_output, t0, note=None):
+    status["elapsed_seconds"] = round(time.time() - t0, 1)
+    if note is not None:
+        status["note"] = note
+    status_path = os.path.join(scene_output, "pipeline_status.json")
+    with open(status_path, "w") as f:
+        json.dump(status, f, indent=2)
+    print(f"\n  Pipeline status written to {status_path}", flush=True)
+
+
 def process_scene(scene_name, data_root, output_root, resolution, inpaint_root,
-                   skip_seg=False, skip_sam=False, start_stage=1, skip_fid_eval=False):
-    """Run the full pipeline for a single scene."""
+                   skip_seg=False, skip_sam=False, start_stage=1, skip_fid_eval=False,
+                   finetune_iterations=None, stop_after_stage=None):
+    """Run the full pipeline for a single scene.
+
+    If finetune_iterations is a non-empty list, stage 10b runs once per value
+    (same LaMa/fusion preamble), writing e.g. .../iteration_5000, iteration_12000.
+    Evaluation then picks up every inpaint/*/iteration_* folder.
+    """
     scene_data = os.path.join(data_root, scene_name)
     scene_output = os.path.join(output_root, scene_name)
     gs_output = os.path.join(scene_output, "3dgs_output")
@@ -508,11 +554,11 @@ def process_scene(scene_name, data_root, output_root, resolution, inpaint_root,
             import json as _json
             with open(config_file) as f:
                 cfg = _json.load(f)
-            target_id = cfg.get("select_obj_id", [182])
+            target_id = cfg.get("select_obj_id", [1])
             surrounding_ids = cfg.get("target_surronding_id", [])
             print(f"  Loaded target from config: {target_id}, Surrounding: {surrounding_ids}", flush=True)
         else:
-            target_id = [182]
+            target_id = [1]
             surrounding_ids = []
 
     if start_stage <= 7:
@@ -564,24 +610,48 @@ def process_scene(scene_name, data_root, output_root, resolution, inpaint_root,
             status["elapsed_seconds"] = round(time.time() - t0, 1)
             return status
 
+        if stop_after_stage is not None and int(stop_after_stage) <= 9:
+            _write_pipeline_status(
+                status,
+                scene_output,
+                t0,
+                note=f"Stopped after stage 9 (LaMa postprocess); resume with --start-stage 10.",
+            )
+            return status
+
     if start_stage <= 10:
         print(f"\n--- Stage 10/11: 3D inpainting ---")
         ok = stage_ply_fusion(scene_data, scene_output, scene_name, inpaint_root, log_dir)
         status["stages"]["ply_fusion"] = "ok" if ok else "fail"
+        if not ok:
+            print(f"  FATAL: PLY fusion failed for {scene_name}", flush=True)
+            status["elapsed_seconds"] = round(time.time() - t0, 1)
+            return status
 
-        ok = stage_gs_inpaint(scene_data, scene_output, scene_name, resolution, inpaint_root, log_dir)
-        status["stages"]["gs_inpaint"] = "ok" if ok else "fail"
+        if finetune_iterations:
+            for it in finetune_iterations:
+                print(f"\n  --- 3D inpaint (finetune_iteration={it}) ---", flush=True)
+                if not patch_object_inpaint_finetune_iteration(inpaint_root, scene_name, it):
+                    status["stages"][f"gs_inpaint_{it}"] = "fail"
+                    ok = False
+                    break
+                ok = stage_gs_inpaint(
+                    scene_data, scene_output, scene_name, resolution, inpaint_root, log_dir)
+                status["stages"][f"gs_inpaint_{it}"] = "ok" if ok else "fail"
+                if not ok:
+                    print(f"  FATAL: 3D inpaint failed at finetune_iteration={it}", flush=True)
+                    break
+        else:
+            ok = stage_gs_inpaint(
+                scene_data, scene_output, scene_name, resolution, inpaint_root, log_dir)
+            status["stages"]["gs_inpaint"] = "ok" if ok else "fail"
 
     if start_stage <= 11:
         print(f"\n--- Stage 11/11: Evaluation ---")
         ok = stage_evaluate(scene_output, inpaint_root, log_dir, skip_fid=skip_fid_eval)
         status["stages"]["evaluation"] = "ok" if ok else "fail"
 
-    status["elapsed_seconds"] = round(time.time() - t0, 1)
-    status_path = os.path.join(scene_output, "pipeline_status.json")
-    with open(status_path, "w") as f:
-        json.dump(status, f, indent=2)
-    print(f"\n  Pipeline status written to {status_path}")
+    _write_pipeline_status(status, scene_output, t0)
 
     return status
 
@@ -602,6 +672,22 @@ def main():
                         help="Skip FID in metrics (offline GPU nodes); PSNR/SSIM/LPIPS still run")
     parser.add_argument("--data-root", default=None)
     parser.add_argument("--output-root", default=None)
+    parser.add_argument(
+        "--finetune-iterations",
+        type=int,
+        nargs="+",
+        default=None,
+        help="Optional: run stage 10b once per value (e.g. 5000 12000 20000). "
+             "Patches object_inpaint/<scene>.json finetune_iteration before each run.",
+    )
+    parser.add_argument(
+        "--stop-after-stage",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Exit after completing stage N (only N=9 supported: after LaMa postprocess, before fusion). "
+             "Use for virtual-depth alignment before stage 10.",
+    )
     args = parser.parse_args()
 
     root = os.path.abspath(get_root())
@@ -617,11 +703,16 @@ def main():
         print(f"\n{'='*60}")
         print(f"  Processing scene: {scene}")
         print(f"{'='*60}")
+        if args.stop_after_stage is not None and args.stop_after_stage != 9:
+            raise SystemExit("--stop-after-stage currently supports only 9 (after LaMa postprocess)")
         status = process_scene(
             scene, data_root, output_root, args.resolution, inpaint_root,
             skip_seg=args.skip_seg, skip_sam=args.skip_sam,
             start_stage=args.start_stage,
-            skip_fid_eval=args.skip_fid_eval)
+            skip_fid_eval=args.skip_fid_eval,
+            finetune_iterations=args.finetune_iterations,
+            stop_after_stage=args.stop_after_stage,
+        )
         all_status[scene] = status
 
     summary_path = os.path.join(output_root, "pipeline_summary.json")
