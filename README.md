@@ -9,13 +9,13 @@ By integrating zero-shot segmentation (**SAM 3**) and latent inpainting (**LaMa*
 Below are the 3D orbit renderings of a real-world scene (a bag on a street), demonstrating the progression from the original 3DGS scene to the masked void, and finally the generative inpainting result.
 
 ### 1. Original 3DGS Scene
-<video src="with_bag.mp4" autoplay loop muted playsinline width="800"></video>
+<video src="https://raw.githubusercontent.com/NishchalMN/latent_void/main/assets/with_bag.mp4" autoplay loop muted playsinline width="800"></video>
 
 ### 2. Masked / Pruned 3D Void (Target Object Removed)
-<video src="masked.mp4" autoplay loop muted playsinline width="800"></video>
+<video src="https://raw.githubusercontent.com/NishchalMN/latent_void/main/assets/masked.mp4" autoplay loop muted playsinline width="800"></video>
 
 ### 3. Generative 3DGS Filled Scene
-<video src="filled.mp4" autoplay loop muted playsinline width="800"></video>
+<video src="https://raw.githubusercontent.com/NishchalMN/latent_void/main/assets/filled.mp4" autoplay loop muted playsinline width="800"></video>
 
 ---
 
